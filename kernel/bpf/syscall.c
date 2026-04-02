@@ -39,6 +39,10 @@
 
 #include <net/tcx.h>
 
+/* JARA: For gbpf module */
+#include <linux/gbpf.h>
+/* End of JARA */
+
 #define IS_FD_ARRAY(map) ((map)->map_type == BPF_MAP_TYPE_PERF_EVENT_ARRAY || \
 			  (map)->map_type == BPF_MAP_TYPE_CGROUP_ARRAY || \
 			  (map)->map_type == BPF_MAP_TYPE_ARRAY_OF_MAPS)
@@ -70,6 +74,12 @@ static const struct bpf_map_ops * const bpf_map_types[] = {
 #undef BPF_MAP_TYPE
 #undef BPF_LINK_TYPE
 };
+
+/* JARA: Define macros */
+//#define LOG_E pr_info("[syscall.c] Enter: %s\n", __func__)
+#define LOG_E ;
+//#define GBPF_DEBUG 1
+/* End of JARA */
 
 /*
  * If we're handed a bigger struct than we know of, ensure all the unknown bits
@@ -2591,6 +2601,11 @@ static int bpf_prog_load(union bpf_attr *attr, bpfptr_t uattr, u32 uattr_size)
 	int err;
 	char license[128];
 
+	/* JARA: Variable */
+	bool is_gbpf = gbpf_call_check_module();
+	LOG_E;
+	/* End of JARA */
+	
 	if (CHECK_ATTR(BPF_PROG_LOAD))
 		return -EINVAL;
 
@@ -2743,6 +2758,14 @@ static int bpf_prog_load(union bpf_attr *attr, bpfptr_t uattr, u32 uattr_size)
 	err = bpf_check(&prog, attr, uattr, uattr_size);
 	if (err < 0)
 		goto free_used_maps;
+	
+	/* JARA: Create gbpf pgd, and map first page */
+	if (is_gbpf) {
+	  gbpf_call_create_pgd(prog);
+	  gbpf_call_map(prog);
+	  prog->aux->vmid = gbpf_call_get_vmid();
+	}
+	/* End of JARA */
 
 	prog = bpf_prog_select_runtime(prog, &err);
 	if (err < 0)
@@ -2773,6 +2796,25 @@ static int bpf_prog_load(union bpf_attr *attr, bpfptr_t uattr, u32 uattr_size)
 	err = bpf_prog_new_fd(prog);
 	if (err < 0)
 		bpf_prog_put(prog);
+
+	/* JARA: Map used map value pages */
+	if (is_gbpf) {
+	  int i;
+#ifdef GBPF_DEBUG
+	  pr_info("Map count : %d\n", prog->aux->used_map_cnt);
+#endif
+	  // Mapping MAP value page into the gbpf space 
+	  for (i=0; i<prog->aux->used_map_cnt; i++) {
+	    struct bpf_map *map = (struct bpf_map *)prog->aux->used_maps[i];
+#ifdef GBPF_DEBUG
+	    pr_info("prog->aux->used_maps[%d] : %px, %px\n", i,
+		    map, map->gbpf_alloc_base);
+#endif
+	    gbpf_call_map_ext(prog, map->gbpf_alloc_base, map->value_region.size, MAP);
+	  }
+	}
+	/* End of JARA */
+
 	return err;
 
 free_used_maps:

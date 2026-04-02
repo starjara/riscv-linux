@@ -64,6 +64,23 @@ typedef int (*bpf_iter_init_seq_priv_t)(void *private_data,
 typedef void (*bpf_iter_fini_seq_priv_t)(void *private_data);
 typedef unsigned int (*bpf_func_t)(const void *,
 				   const struct bpf_insn *);
+
+/* JARA : GBPF region struct */
+struct gbpf_page_region {
+  struct page *page;          /* first page of the allocation */
+  void *vaddr;                /* kernel virtual base */
+  u64 size;                   /* requested size, page-aligned */
+  unsigned long nr_pages;     /* requested size / PAGE_SIZE */
+  unsigned int order;         /* buddy order used for alloc_pages() */
+  bool allocated;
+};
+
+struct gbpf_region {
+	struct list_head entry;
+	struct gbpf_page_region region;
+};
+/* End of JARA */
+
 struct bpf_iter_seq_info {
 	const struct seq_operations *seq_ops;
 	bpf_iter_init_seq_priv_t init_seq_private;
@@ -273,6 +290,12 @@ struct bpf_map {
 	/* The 3rd and 4th cacheline with misc members to avoid false sharing
 	 * particularly with refcounting.
 	 */
+
+  /* JARA : gBPF Region list */
+  struct gbpf_page_region value_region;
+  void *gbpf_alloc_base;
+  /* End of JARA */
+  
 	atomic64_t refcnt ____cacheline_aligned;
 	atomic64_t usercnt;
 	/* rcu is used before freeing and work is only used during freeing */
@@ -1488,6 +1511,19 @@ struct bpf_prog_aux {
 		struct work_struct work;
 		struct rcu_head	rcu;
 	};
+  /* JARA: bpf space pages */
+  struct page *gpgd; // gbpf space pgd
+  struct page *gbpf_page; // gbpf space leaf page
+  struct page *gbpf_pkt_page;
+  struct page *gbpf_map_page;
+  struct page *gbpf_shadow_pkt_page;
+  const void *orig_ctx;
+  u32 vmid;
+  u32 bpf_stack_adjust;
+  u64 gbpf_ctx_access_mask;
+  bool gbpf_uses_raw_ctx_helpers;
+  /* End of JARA */
+
 };
 
 struct bpf_prog {
