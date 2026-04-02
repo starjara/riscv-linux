@@ -29,6 +29,10 @@
 #include <asm/byteorder.h>
 #include <uapi/linux/filter.h>
 
+/* JARA: For gbpf module */
+#include <linux/gbpf.h>
+/* End of JARA */
+
 struct sk_buff;
 struct sock;
 struct seccomp_data;
@@ -602,14 +606,40 @@ static __always_inline u32 __bpf_prog_run(const struct bpf_prog *prog,
 		u64 start = sched_clock();
 		unsigned long flags;
 
-		ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
+		// ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
+
+		/* JARA: copy ctx, call dfunc, delete ctx  */
+		if (prog->aux->gpgd != NULL) {
+		  void *sandboxed_ctx;
+		  sandboxed_ctx = gbpf_copy_ctx(ctx, prog);
+		  //ret = dfunc(sandboxed_ctx, prog->insnsi, prog->bpf_func);
+		  ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
+		  __free_pages(prog->aux->gbpf_shadow_pkt_page, 0);
+		}
+		else
+		  ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
+		/* End of JARA */
+
 		stats = this_cpu_ptr(prog->stats);
 		flags = u64_stats_update_begin_irqsave(&stats->syncp);
 		u64_stats_inc(&stats->cnt);
 		u64_stats_add(&stats->nsecs, sched_clock() - start);
 		u64_stats_update_end_irqrestore(&stats->syncp, flags);
 	} else {
-		ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
+	  //ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
+	  
+		/* JARA: copy ctx, call dfunc, delete ctx  */
+		if (prog->aux->gpgd != NULL) {
+		  void *sandboxed_ctx;
+		  sandboxed_ctx = gbpf_copy_ctx(ctx, prog);
+		  //ret = dfunc(sandboxed_ctx, prog->insnsi, prog->bpf_func);
+		  ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
+		  __free_pages(prog->aux->gbpf_shadow_pkt_page, 0);
+		}
+		else
+		  ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
+		/* End of JARA */
+
 	}
 	return ret;
 }
