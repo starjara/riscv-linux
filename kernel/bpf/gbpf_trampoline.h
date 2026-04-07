@@ -37,9 +37,9 @@ struct gbpf_helper_meta {
   /* Kernel aliases for GBPF virtual regions. */
   u64 ctx_base;
   u64 pkt_base;
-  u64 map_base;
+  u64 map_desc_base;
   /* Original helper ID preserved by verifier in insn->off. */
-  u64 helper_id;
+  u64 prog_type;
   /* __bpf_call_base-relative call target offset. */
   u64 call_imm;
   /* Original kernel ctx pointer for ctx-dereferencing helpers. */
@@ -52,7 +52,7 @@ typedef u64 (*gbpf_helper_fn_t)(u64, u64, u64, u64, u64);
 extern const struct gbpf_helper_desc gbpf_helper_descs[];
 
 // Descriptor table function prototypes
-const struct gbpf_helper_desc *gbpf_get_helper_desc(u32 helper_id);
+//const struct gbpf_helper_desc *gbpf_get_helper_desc(u32 helper_id);
 
 static __always_inline struct gbpf_helper_meta gbpf_read_helper_meta(void)
 {
@@ -68,9 +68,9 @@ static __always_inline struct gbpf_helper_meta gbpf_read_helper_meta(void)
 
   m.ctx_base = *(u64 *)(fp + GBPF_STK_CTX_BASE);
   m.pkt_base = *(u64 *)(fp + GBPF_STK_PKT_BASE);
-  m.map_base = *(u64 *)(fp + GBPF_STK_MAP_BASE);
+  m.map_desc_base = *(u64 *)(fp + GBPF_STK_MAP_BASE);
   m.orig_ctx = *(u64 *)(fp + GBPF_ORG_CTX);
-  m.helper_id = *(u64 *)(fp + GBPF_STK_HELPER_ID);
+  m.prog_type = *(u64 *)(fp + GBPF_STK_PROG_TYPE);
   
   return m;
 }

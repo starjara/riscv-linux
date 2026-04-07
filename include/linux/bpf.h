@@ -1520,8 +1520,7 @@ struct bpf_prog_aux {
   const void *orig_ctx;
   u32 vmid;
   u32 bpf_stack_adjust;
-  u64 gbpf_ctx_access_mask;
-  bool gbpf_uses_raw_ctx_helpers;
+  struct gbpf_map_desc *gbpf_maps;
   /* End of JARA */
 
 };
@@ -1796,9 +1795,16 @@ struct bpf_array {
 	u32 index_mask;
 	struct bpf_array_aux *aux;
 	union {
+	  /*
 		DECLARE_FLEX_ARRAY(char, value) __aligned(8);
 		DECLARE_FLEX_ARRAY(void *, ptrs) __aligned(8);
 		DECLARE_FLEX_ARRAY(void __percpu *, pptrs) __aligned(8);
+	  */
+	  /* JARA */
+	  char value[0] __aligned(8);
+	  void *ptrs[0] __aligned(8);
+	  void __percpu **pptrs __aligned(8);
+	  /* End of JARA */
 	};
 };
 

@@ -41,6 +41,10 @@
 #include <asm/barrier.h>
 #include <asm/unaligned.h>
 
+/* JARA: Include gbpf header */
+#include <linux/gbpf.h>
+/* End of JARA */
+
 /* Registers */
 #define BPF_R0	regs[BPF_REG_0]
 #define BPF_R1	regs[BPF_REG_1]
@@ -63,6 +67,11 @@
 #define CTX	regs[BPF_REG_CTX]
 #define OFF	insn->off
 #define IMM	insn->imm
+
+/* JARA: Macro define */
+// #define LOG_E pr_info("[core.c] Enter: %s\n", __func__)
+#define LOG_E ; 
+/* End of JARA */
 
 struct bpf_mem_alloc bpf_global_ma;
 bool bpf_global_ma_set;
@@ -2742,6 +2751,11 @@ static void bpf_prog_free_deferred(struct work_struct *work)
 	int i;
 
 	aux = container_of(work, struct bpf_prog_aux, work);
+
+        /* JARA: Insert destroy pgtable */
+	gbpf_call_destroy_pgtable(aux->prog);
+	/* End of JARA */
+	
 #ifdef CONFIG_BPF_SYSCALL
 	bpf_free_kfunc_btf_tab(aux->kfunc_btf_tab);
 #endif

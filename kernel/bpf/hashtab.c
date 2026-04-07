@@ -16,6 +16,12 @@
 #include "map_in_map.h"
 #include <linux/bpf_mem_alloc.h>
 
+/* JARA : Define macros */
+//#define LOG_E pr_info("[hashtab.c] Enter: %s\n", __func__)
+#define LOG_E
+//#define GBPF_DEBUG 1
+/* End of JARA */
+
 #define HTAB_CREATE_FLAG_MASK						\
 	(BPF_F_NO_PREALLOC | BPF_F_NO_COMMON_LRU | BPF_F_NUMA_NODE |	\
 	 BPF_F_ACCESS_MASK | BPF_F_ZERO_SEED)
@@ -130,7 +136,10 @@ struct htab_elem {
 
 static inline bool htab_is_prealloc(const struct bpf_htab *htab)
 {
-	return !(htab->map.map_flags & BPF_F_NO_PREALLOC);
+  //return !(htab->map.map_flags & BPF_F_NO_PREALLOC);
+  /* JARA : Pre alloc */
+  return true;
+  /* End of JARA */
 }
 
 static void htab_init_buckets(struct bpf_htab *htab)
@@ -268,8 +277,61 @@ static void htab_free_prealloced_fields(struct bpf_htab *htab)
 	}
 }
 
+/* JARA : htab element alloc/free helpers */
+static int htab_alloc_elems(struct bpf_htab *htab, u32 num_entries)
+{
+	struct gbpf_page_region *region = &htab->map.value_region;
+	u64 size;
+
+	size = PAGE_ALIGN((u64)htab->elem_size * num_entries);
+	if (!size)
+		return -EINVAL;
+
+	region->size = size;
+	region->nr_pages = size >> PAGE_SHIFT;
+	region->order = get_order(size);
+	region->page = alloc_pages(GFP_KERNEL | __GFP_ZERO, region->order);
+	if (!region->page)
+		return -ENOMEM;
+
+	region->vaddr = page_to_virt(region->page);
+	if (!region->vaddr) {
+		__free_pages(region->page, region->order);
+		memset(region, 0, sizeof(*region));
+		return -ENOMEM;
+	}
+
+	region->allocated = true;
+	htab->elems = region->vaddr;
+	htab->map.gbpf_alloc_base = region->vaddr;
+
+#ifdef GBPF_DEBUG
+	pr_info("htab elem size\t: %u, %u\n", htab->elem_size, num_entries);
+	pr_info("htab elem alloc\t: size=%llu nr_pages=%lu order=%u base=%px\n",
+		region->size, region->nr_pages, region->order, region->vaddr);
+#endif
+
+	return 0;
+}
+
+static void htab_free_elem_region(struct bpf_htab *htab)
+{
+	struct gbpf_page_region *region = &htab->map.value_region;
+
+	if (!region->allocated)
+		return;
+
+	if (region->page)
+		__free_pages(region->page, region->order);
+
+	memset(region, 0, sizeof(*region));
+	htab->elems = NULL;
+}
+/* End of JARA */
+
 static void htab_free_elems(struct bpf_htab *htab)
 {
+  /*
 	int i;
 
 	if (!htab_is_percpu(htab))
@@ -285,6 +347,30 @@ static void htab_free_elems(struct bpf_htab *htab)
 	}
 free_elems:
 	bpf_map_area_free(htab->elems);
+  */
+  
+  /* JARA : Free elems with region */
+
+  u32 num_entries = htab->map.max_entries;
+  int i;
+
+  if (htab_has_extra_elems(htab))
+    num_entries += num_possible_cpus();
+
+  if (htab_is_percpu(htab)) {
+    for (i = 0; i < num_entries; i++) {
+      void __percpu *pptr;
+
+      pptr = htab_elem_get_ptr(get_htab_elem(htab, i),
+			       htab->map.key_size);
+      free_percpu(pptr);
+      cond_resched();
+    }
+  }
+
+  htab_free_elem_region(htab);
+  /* End of JARA */
+
 }
 
 /* The LRU list has a lock (lru_lock). Each htab bucket has a lock
@@ -319,13 +405,33 @@ static int prealloc_init(struct bpf_htab *htab)
 	u32 num_entries = htab->map.max_entries;
 	int err = -ENOMEM, i;
 
+	/* JARA : elem page variable */
+	struct page *mem;
+	u64 size;
+	/* End of JARA */
+
 	if (htab_has_extra_elems(htab))
 		num_entries += num_possible_cpus();
 
+	/*
 	htab->elems = bpf_map_area_alloc((u64)htab->elem_size * num_entries,
 					 htab->map.numa_node);
 	if (!htab->elems)
 		return -ENOMEM;
+	*/
+
+	/* JARA : Alloc elem page */
+	
+	err = htab_alloc_elems(htab, num_entries);
+	if (err)
+	  return err;
+	
+	if (htab_is_percpu(htab))
+	  pr_info("PreCPU\n");
+	else
+	  pr_info("not per CPU\n");
+	/* End of JARA */
+
 
 	if (!htab_is_percpu(htab))
 		goto skip_percpu_elems;
@@ -426,6 +532,14 @@ static int htab_map_alloc_check(union bpf_attr *attr)
 	BUILD_BUG_ON(offsetof(struct htab_elem, fnode.next) !=
 		     offsetof(struct htab_elem, hash_node.pprev));
 
+	/* JARA : per cpu hash disabling */
+	if (attr->map_type == BPF_MAP_TYPE_PERCPU_HASH ||
+	    attr->map_type == BPF_MAP_TYPE_LRU_PERCPU_HASH)
+	return -EOPNOTSUPP;
+	/* End of JARA */
+	
+
+
 	if (zero_seed && !capable(CAP_SYS_ADMIN))
 		/* Guard against local DoS, and discourage production use. */
 		return -EPERM;
@@ -477,11 +591,22 @@ static struct bpf_map *htab_map_alloc(union bpf_attr *attr)
 	 * nothing to do with the map's value.
 	 */
 	bool percpu_lru = (attr->map_flags & BPF_F_NO_COMMON_LRU);
-	bool prealloc = !(attr->map_flags & BPF_F_NO_PREALLOC);
+	//bool prealloc = !(attr->map_flags & BPF_F_NO_PREALLOC);
 	struct bpf_htab *htab;
 	int err, i;
 
-	htab = bpf_map_area_alloc(sizeof(*htab), NUMA_NO_NODE);
+
+	/* JARA : Prealloc always true */
+	bool prealloc = true;
+	/* End of JARA */
+	
+	
+	//htab = bpf_map_area_alloc(sizeof(*htab), NUMA_NO_NODE);
+
+	/* JARA : alloc htab */
+	htab = get_zeroed_page(GFP_KERNEL);
+	/* End of JARA */
+	
 	if (!htab)
 		return ERR_PTR(-ENOMEM);
 
@@ -1049,7 +1174,8 @@ static struct htab_elem *alloc_htab_elem(struct bpf_htab *htab, void *key,
 		if (prealloc) {
 			pptr = htab_elem_get_ptr(l_new, key_size);
 		} else {
-			/* alloc_percpu zero-fills */
+		  /*
+			// alloc_percpu zero-fills 
 			pptr = bpf_mem_cache_alloc(&htab->pcpu_ma);
 			if (!pptr) {
 				bpf_mem_cache_free(&htab->ma, l_new);
@@ -1058,12 +1184,20 @@ static struct htab_elem *alloc_htab_elem(struct bpf_htab *htab, void *key,
 			}
 			l_new->ptr_to_pptr = pptr;
 			pptr = *(void **)pptr;
+		  */
+		  /* JARA : BUG */
+		  BUG();
+		  /* End of JARA */
+
 		}
 
 		pcpu_init_value(htab, pptr, value, onallcpus);
 
+		/*
 		if (!prealloc)
 			htab_elem_set_ptr(l_new, key_size, pptr);
+		*/
+		
 	} else if (fd_htab_map_needs_adjust(htab)) {
 		size = round_up(size, 8);
 		memcpy(l_new->key + round_up(key_size, 8), value, size);
@@ -1578,7 +1712,15 @@ static void htab_map_free(struct bpf_map *map)
 	for (i = 0; i < HASHTAB_MAP_LOCK_COUNT; i++)
 		free_percpu(htab->map_locked[i]);
 	lockdep_unregister_key(&htab->lockdep_key);
-	bpf_map_area_free(htab);
+	//bpf_map_area_free(htab);
+	
+	/* JARA Second */
+	htab_free_elem_region(htab);
+	free_page(htab);
+#ifdef GBPF_DEBUG
+	pr_info("htab free\n");
+#endif
+	/* End of JARA  */
 }
 
 static void htab_map_seq_show_elem(struct bpf_map *map, void *key,
