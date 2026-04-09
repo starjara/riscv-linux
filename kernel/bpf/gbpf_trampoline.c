@@ -197,7 +197,7 @@ static u64 gbpf_convert_helper_ret(const struct gbpf_helper_desc *desc, u64 ret,
   if (!ret)
     return ret;
 
-  if (ret >= 0xff60000000000000 && ret <= 0xff70000000000000 ) {
+  if (ret >= 0xffffaf8000000000 && ret <= 0xffffaf9000000000) {
     //struct bpf_map *map = (struct bpf_map *)m->map_base;
     struct gbpf_map_desc *map_desc = (struct gbpf_map_desc *)m->map_desc_base;
     struct gbpf_map_desc *d = &map_desc[gmap_addr_meta.map_slot];
