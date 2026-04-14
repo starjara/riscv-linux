@@ -599,6 +599,10 @@ static __always_inline u32 __bpf_prog_run(const struct bpf_prog *prog,
 					  bpf_dispatcher_fn dfunc)
 {
 	u32 ret;
+	/* JARA: GBPF call setup */
+	bool sandboxed = prog->aux->gaux->gpgd != NULL ? true : false;
+	const void *run_ctx = sandboxed ? gbpf_copy_ctx(ctx, prog) : ctx;
+	/* End of JARA */
 
 	cant_migrate();
 	if (static_branch_unlikely(&bpf_stats_enabled_key)) {
@@ -607,18 +611,8 @@ static __always_inline u32 __bpf_prog_run(const struct bpf_prog *prog,
 		unsigned long flags;
 
 		// ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
-
 		/* JARA: copy ctx, call dfunc, delete ctx  */
-		if (prog->aux->gpgd != NULL) {
-		  void *sandboxed_ctx;
-		  sandboxed_ctx = gbpf_copy_ctx(ctx, prog);
-		  //ret = dfunc(sandboxed_ctx, prog->insnsi, prog->bpf_func);
-		  ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
-		  if (prog->aux->gbpf_shadow_pkt_page) 
-		    __free_pages(prog->aux->gbpf_shadow_pkt_page, 0);
-		}
-		else
-		  ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
+		ret = dfunc(run_ctx, prog->insnsi, prog->bpf_func);
 		/* End of JARA */
 
 		stats = this_cpu_ptr(prog->stats);
@@ -628,20 +622,7 @@ static __always_inline u32 __bpf_prog_run(const struct bpf_prog *prog,
 		u64_stats_update_end_irqrestore(&stats->syncp, flags);
 	} else {
 	  //ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
-	  
-		/* JARA: copy ctx, call dfunc, delete ctx  */
-		if (prog->aux->gpgd != NULL) {
-		  void *sandboxed_ctx;
-		  sandboxed_ctx = gbpf_copy_ctx(ctx, prog);
-		  //ret = dfunc(sandboxed_ctx, prog->insnsi, prog->bpf_func);
-		  ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
-		  if (prog->aux->gbpf_shadow_pkt_page) 
-		    __free_pages(prog->aux->gbpf_shadow_pkt_page, 0);
-		}
-		else
-		  ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
-		/* End of JARA */
-
+	  ret = dfunc(run_ctx, prog->insnsi, prog->bpf_func);
 	}
 	return ret;
 }

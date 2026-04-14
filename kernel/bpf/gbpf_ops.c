@@ -102,8 +102,6 @@ int gbpf_call_map_ext(const struct bpf_prog *prog, const void *kaddr, size_t len
 }
 EXPORT_SYMBOL_GPL(gbpf_call_map_ext);
 
-
-
 void gbpf_call_destroy_pgtable(struct bpf_prog *prog)
 {
     const struct gbpf_ops *ops;

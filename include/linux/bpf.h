@@ -75,9 +75,15 @@ struct gbpf_page_region {
   bool allocated;
 };
 
-struct gbpf_region {
-	struct list_head entry;
-	struct gbpf_page_region region;
+struct gbpf_aux {
+  struct page *gpgd;
+  struct page *gbpf_page;
+  void *pkt_page;
+  const void *orig_ctx;
+  struct gbpf_map_desc *gbpf_maps;
+  
+  const struct xdp_rxq_info *cached_xdp_rxq;
+  int cached_xdp_ifindex;
 };
 /* End of JARA */
 
@@ -1512,15 +1518,10 @@ struct bpf_prog_aux {
 		struct rcu_head	rcu;
 	};
   /* JARA: bpf space pages */
-  struct page *gpgd; // gbpf space pgd
-  struct page *gbpf_page; // gbpf space leaf page
-  struct page *gbpf_pkt_page;
-  struct page *gbpf_map_page;
-  struct page *gbpf_shadow_pkt_page;
-  const void *orig_ctx;
   u32 vmid;
   u32 bpf_stack_adjust;
-  struct gbpf_map_desc *gbpf_maps;
+
+  struct gbpf_aux *gaux;
   /* End of JARA */
 
 };

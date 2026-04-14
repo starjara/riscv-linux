@@ -1096,6 +1096,7 @@ static inline void emit_subw(u8 rd, u8 rs1, u8 rs2, struct rv_jit_context *ctx)
  */
 enum {
   RV_CSR_HGATP = 0x680,
+  RV_CSR_VSATP = 0x280,
 };
 
 enum {
@@ -1149,6 +1150,24 @@ static inline void emit_hvmi(u16 type, u8 rd, u8 rs1, u8 rs2, struct rv_jit_cont
   emit(instr, ctx);
 } 
 
+/*
+* Hypervisor fence instructions are SYSTEM opcode encodings.
+* HFENCE.GVMA rs1, rs2:
+*   rs1 = guest physical address selector (x0 => all)
+*   rs2 = VMID selector (x0 => current/all as defined by spec usage)
+*/
+static inline u32 rv_hfence_gvma(u8 rs1, u8 rs2)
+{
+  return rv_r_insn(0x31, rs2, rs1, 0, RV_REG_ZERO, 0x73);
+}
+
+static inline void emit_hfence_gvma(u8 rs1, u8 rs2, struct rv_jit_context *ctx)
+{
+  emit(rv_hfence_gvma(rs1, rs2), ctx);
+}
+ 
+
+/* End of JARA */
 
 
 void bpf_jit_build_prologue(struct rv_jit_context *ctx);

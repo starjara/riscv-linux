@@ -3,6 +3,8 @@
 
 #include <linux/types.h>
 #include <linux/bpf.h>
+#include <linux/netdevice.h>
+//#include <net/xdp.h>
 
 #define GBPF_PAGE_SIZE 4096
 #define GBPF_CONTEXT_SIZE 512
@@ -18,14 +20,10 @@
 
 #define GBPF_STK_SAVE_S11       0
 #define GBPF_STK_SAVE_S10       8
-#define GBPF_STK_OLD_HGATP     16
-#define GBPF_STK_CTX_BASE      24
-#define GBPF_STK_PKT_BASE      32
-#define GBPF_STK_MAP_BASE      40
-#define GBPF_ORG_CTX           48
-#define GBPF_STK_PROG_TYPE     56
+#define GBPF_STK_SAVE_GAUX       16
+#define GBPF_STK_OLD_HGATP     24
+#define GBPF_TR_FRAME_SIZE     32
 
-#define GBPF_TR_FRAME_SIZE     64
 
 struct page;
 
@@ -109,7 +107,5 @@ static inline int gbpf_decode_map_addr(u64 addr, u32 *map_slot,
 	*offset = rem % GBPF_CPU_WINDOW_SIZE;
 	return 0;
 }
-
-
 
 #endif /* _LINUX_GBPF_H  */

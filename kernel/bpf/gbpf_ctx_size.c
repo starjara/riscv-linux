@@ -12,7 +12,7 @@
 
 #include <net/netfilter/nf_bpf_link.h>
 
-#include "disasm.h"
+
 
 size_t gbpf_ctx_size_map[] = {
 #define BPF_PROG_TYPE(_id, _name, prog_ctx_type, kern_ctx_type) \

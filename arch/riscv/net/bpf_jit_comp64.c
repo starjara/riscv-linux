@@ -257,23 +257,8 @@ static void __build_epilogue(bool is_tail_call, struct rv_jit_context *ctx)
 	}
 	
 	/* JARA: Restore HGATP and S11 */
-	if (gbpf_ready && ctx->prog->aux->gbpf_page) {
-	  emit(rv_nop(), ctx);
+	if (gbpf_ready && ctx->prog->aux && ctx->prog->aux->gaux->gbpf_page) {
 	  
-	  /*
-	  // Restore HGATP from kernel SP
-	  store_offset -= 16;
-	  emit_ld(RV_REG_S11, store_offset, RV_REG_SP, ctx);
-	  emit_csrw(0, RV_REG_S11, RV_CSR_HGATP, ctx);
-	
-	  // Restore S11 and S10
-	  store_offset += 8;
-	  emit_ld(RV_REG_S10, store_offset, RV_REG_SP, ctx);
-	  store_offset += 8;
-	  emit_ld(RV_REG_S11, store_offset, RV_REG_SP, ctx);
-	  store_offset -= 16;
-	  */
-
 	  /*
 	   * S10 is still the fixed trampoline/frame base here.
 	   * Restore old HGATP first.
@@ -293,7 +278,6 @@ static void __build_epilogue(bool is_tail_call, struct rv_jit_context *ctx)
 	  emit_ld(RV_REG_S10, GBPF_STK_SAVE_S10, RV_REG_S10, ctx);
 
 	  
-	  emit(rv_nop(), ctx);
 	}
 	/* End of JARA */
 
@@ -1587,15 +1571,11 @@ out_be:
 		 * S10: Kernel based frame pointer 
 		 */
 		if (gbpf_ready && insn->src_reg == 0) {
+		  if (!ctx->prog->aux->gaux->gbpf_page)
+		    return ret;
 
 		  // S11 has call taget offset
-		  //emit_addr(RV_REG_S11, addr, fixed_addr, ctx);
 		  emit_imm(RV_REG_S11, insn->imm, ctx);
-		  /* Added */
-		  /*
-		  emit_imm(RV_REG_T0, insn->off, ctx);
-		  emit_sd(RV_REG_S10, GBPF_STK_HELPER_ID, RV_REG_T0, ctx);
-		  */
 #ifdef GBPF_DEBUG 
 		  pr_info("helper_call_imm : 0x%llx\n", (u64)insn->imm);
 		  pr_info("helper_id(off)  : 0x%llx\n", (u64)insn->off);
@@ -1613,10 +1593,7 @@ out_be:
 		    return ret;
 		  
 		}
-		emit_mv(bpf_to_rv_reg(BPF_REG_0, ctx), RV_REG_A0, ctx);
 		/* End of JARA */
-
-
 
 		if (insn->src_reg != BPF_PSEUDO_CALL)
 			emit_mv(bpf_to_rv_reg(BPF_REG_0, ctx), RV_REG_A0, ctx);
@@ -1655,31 +1632,9 @@ out_be:
 		  //emit_imm(rd, imm64, ctx);
 		  
 		  /* JARA: Maybe map base addr */
-		  if (gbpf_ready)  {
-#ifdef GBPF_DEBUG
-		    if (insn->src_reg == BPF_PSEUDO_MAP_VALUE) {
-		      pr_info("src is BPF_PSEUDO_MAP_VALUE\n");
-		    }
-		    if (insn->dst_reg == BPF_PSEUDO_MAP_VALUE) {
-		      pr_info("dst is BPF_PSEUDO_MAP_VALUE\n");
-		    }
-		    pr_info("imm64_org : %llx\n", imm64);
-#endif
-		    /*
-		    if (imm64 >= 0xff60000000000000) {
-		      u64 off = PAGE_ALIGN(imm64) - imm64;
-#ifdef GBPF_DEBUG
-		      pr_info("Kernel addr, convert to BPF space map page 0x%lx, off 0x%lx ", imm64, off);
-#endif
-		      imm64 = GBPF_MAP_BASE;
-		      imm64 -= off;
-#ifdef GBPF_DEBUG
-		      pr_info("imm64_map base : %llx\n", imm64);
-#endif
-		    }
-		    */
-
-		    if (imm64 >= 0xff60000000000000ULL) {
+		  if (gbpf_ready && ctx->prog->aux && ctx->prog->aux->gaux->gbpf_page) {
+		    //if (imm64 >= 0xff60000000000000ULL) {
+		    if (virt_addr_valid(imm64)) {
 		      u64 gbpf_addr;
 		      u64 off = PAGE_ALIGN(imm64) - imm64;
 		      
@@ -1696,13 +1651,14 @@ out_be:
 #endif
 		      }
 		    }
-
+		    
 		    emit_imm(rd, imm64, ctx);
 		  }
 		  else {
 		    emit_imm(rd, imm64, ctx);
 		  }
 		  /* End of JARA */
+
 
 		}
 
@@ -1746,10 +1702,12 @@ out_be:
 			  
 				/* JARA: check hlv.b */
 				insns_start = ctx->ninsns;
-				if (gbpf_ready) {
-				  emit_addi(rs, rs, off, ctx);
+				if (gbpf_ready && ctx->prog->aux && ctx->prog->aux->gaux->gbpf_page) {
+				  if (off != 0) 
+				    emit_addi(rs, rs, off, ctx);
 				  emit_hvmi(HLV_B, rd, rs, 0, ctx);
-				  emit_addi(rs, rs, -off, ctx);
+				  if (off != 0) 
+				    emit_addi(rs, rs, -off, ctx);
 				}
 				else {
 				  if (sign_ext)
@@ -1784,10 +1742,12 @@ out_be:
 			  */
 				/* JARA: check hlv.h */
 				insns_start = ctx->ninsns;
-				if (gbpf_ready) {
-				  emit_addi(rs, rs, off, ctx);
+				if (gbpf_ready && ctx->prog->aux && ctx->prog->aux->gaux->gbpf_page) {
+				  if (off != 0) 
+				    emit_addi(rs, rs, off, ctx);
 				  emit_hvmi(HLV_H, rd, rs, 0, ctx);
-				  emit_addi(rs, rs, -off, ctx);
+				  if (off != 0) 
+				    emit_addi(rs, rs, -off, ctx);
 				}
 				else {
 				  if (sign_ext)
@@ -1824,10 +1784,12 @@ out_be:
 
 				/* JARA: check hlv.w */
 				insns_start = ctx->ninsns;
-				if (gbpf_ready) {
-				  emit_addi(rs, rs, off, ctx);
+				if (gbpf_ready && ctx->prog->aux && ctx->prog->aux->gaux->gbpf_page) {
+				  if (off != 0) 
+				    emit_addi(rs, rs, off, ctx);
 				  emit_hvmi(HLV_W, rd, rs, 0, ctx);
-				  emit_addi(rs, rs, -off, ctx);
+				  if (off != 0) 
+				    emit_addi(rs, rs, -off, ctx);
 				}
 				else {
 				  if (sign_ext)
@@ -1859,10 +1821,12 @@ out_be:
 
 				/* JARA: check hlv.d */
 				insns_start = ctx->ninsns;
-				if (gbpf_ready) {
-				  emit_addi(rs, rs, off, ctx);
+				if (gbpf_ready && ctx->prog->aux && ctx->prog->aux->gaux->gbpf_page) {
+				  if (off != 0) 
+				    emit_addi(rs, rs, off, ctx);
 				  emit_hvmi(HLV_D, rd, rs, 0, ctx);
-				  emit_addi(rs, rs, -off, ctx);
+				  if (off != 0) 
+				    emit_addi(rs, rs, -off, ctx);
 				}
 				else {
 				  emit_ld(rd, off, rs, ctx);
@@ -1945,20 +1909,18 @@ out_be:
 		if (is_12b_int(off)) {
 		  //emit(rv_sb(rd, off, rs), ctx);
 			/* JARA: check hsv.b */
-			if (gbpf_ready) {
-			  emit(rv_nop(), ctx);
-			  
-			  emit_addi(rd, rd, off, ctx);
-			  emit_hvmi(HSV_B, 0, rd, rs, ctx);
-			  emit_addi(rd, rd, -off, ctx);
-			  
-			  emit(rv_nop(), ctx);
-			}
-			else 
-			  emit(rv_sb(rd, off, rs), ctx);
-			/* End of JARA */
-
-			break;
+		  if (gbpf_ready && ctx->prog->aux && ctx->prog->aux->gaux->gbpf_page) {
+		    if (off != 0) 
+		      emit_addi(rd, rd, off, ctx);
+		    emit_hvmi(HSV_B, 0, rd, rs, ctx);
+		    if (off != 0) 
+		      emit_addi(rd, rd, -off, ctx);
+		  }
+		  else 
+		    emit(rv_sb(rd, off, rs), ctx);
+		  /* End of JARA */
+		  
+		  break;
 		}
 
 		emit_imm(RV_REG_T1, off, ctx);
@@ -1969,20 +1931,18 @@ out_be:
 		if (is_12b_int(off)) {
 		  //emit(rv_sh(rd, off, rs), ctx);
 			/* JARA: check hsv.h */
-			if (gbpf_ready) {
-			  emit(rv_nop(), ctx);
-			  
-			  emit_addi(rd, rd, off, ctx);
-			  emit_hvmi(HSV_H, 0, rd, rs, ctx);
-			  emit_addi(rd, rd, -off, ctx);
-			  
-			  emit(rv_nop(), ctx);
-			}
-			else 
-			  emit(rv_sh(rd, off, rs), ctx);
-			/* End of JARA */
-
-			break;
+		  if (gbpf_ready && ctx->prog->aux && ctx->prog->aux->gaux->gbpf_page) {
+		    if (off != 0) 
+		      emit_addi(rd, rd, off, ctx);
+		    emit_hvmi(HSV_H, 0, rd, rs, ctx);
+		    if (off != 0) 
+		      emit_addi(rd, rd, -off, ctx);
+		  }
+		  else 
+		    emit(rv_sh(rd, off, rs), ctx);
+		  /* End of JARA */
+		  
+		  break;
 		}
 
 		emit_imm(RV_REG_T1, off, ctx);
@@ -1993,20 +1953,18 @@ out_be:
 		if (is_12b_int(off)) {
 		  //emit_sw(rd, off, rs, ctx);
 			/* JARA: check hsv.w */
-			if (gbpf_ready) {
-			  emit(rv_nop(), ctx);
-			  
-			  emit_addi(rd, rd, off, ctx);
-			  emit_hvmi(HSV_W, 0, rd, rs, ctx);
-			  emit_addi(rd, rd, -off, ctx);
-			  
-			  emit(rv_nop(), ctx);
-			}
-			else 
-			  emit(rv_sw(rd, off, rs), ctx);
-			/* End of JARA */
-
-			break;
+		  if (gbpf_ready && ctx->prog->aux && ctx->prog->aux->gaux->gbpf_page) {
+		    if (off != 0) 
+		      emit_addi(rd, rd, off, ctx);
+		    emit_hvmi(HSV_W, 0, rd, rs, ctx);
+		    if (off != 0) 
+		      emit_addi(rd, rd, -off, ctx);
+		  }
+		  else 
+		    emit(rv_sw(rd, off, rs), ctx);
+		  /* End of JARA */
+		  
+		  break;
 		}
 
 		emit_imm(RV_REG_T1, off, ctx);
@@ -2017,21 +1975,17 @@ out_be:
 		if (is_12b_int(off)) {
 		  //			emit_sd(rd, off, rs, ctx);
 		        /* JARA: check hsv.w */
-			if (gbpf_ready) {
-			  emit(rv_nop(), ctx);
-			  
-			  emit_addi(rd, rd, off, ctx);
-			  emit_hvmi(HSV_D, 0, rd, rs, ctx);
-			  emit_addi(rd, rd, -off, ctx);
-			  
-			  emit(rv_nop(), ctx);
-			}
-			else 
-			  emit(rv_sd(rd, off, rs), ctx);
-			/* End of JARA */
-
-
-			break;
+		  if (gbpf_ready && ctx->prog->aux && ctx->prog->aux->gaux->gbpf_page) {
+		    if (off != 0) 
+		      emit_addi(rd, rd, off, ctx);
+		    emit_hvmi(HSV_D, 0, rd, rs, ctx);
+		    if (off != 0) 
+		      emit_addi(rd, rd, -off, ctx);
+		  }
+		  else 
+		    emit(rv_sd(rd, off, rs), ctx);
+		  /* End of JARA */
+		  break;
 		}
 
 		emit_imm(RV_REG_T1, off, ctx);
@@ -2044,8 +1998,8 @@ out_be:
 		emit_atomic(rd, rs, off, imm,
 			    BPF_SIZE(code) == BPF_DW, ctx);
 	  */
-	  /* JARA : Atomic ha... */
-	  if (gbpf_ready) {
+	  /* JARA : Atomic */
+	  if (gbpf_ready && ctx->prog->aux && ctx->prog->aux->gaux->gbpf_page) {
 	    u8 tmp = RV_REG_T0;
 	    
 	    // Need interrupt disable and enable?
@@ -2062,8 +2016,6 @@ out_be:
 	    switch(imm) {
 	    case BPF_ADD:
 	      if(BPF_SIZE(code) == BPF_DW) {
-		emit(rv_fence(0x3, 0x3), ctx);
-
 		emit_csrrci(RV_REG_ZERO, SR_IE, CSR_STATUS, ctx);
 
 		emit_hvmi(HLV_D, tmp, rd, 0, ctx);
@@ -2071,15 +2023,13 @@ out_be:
 		emit_hvmi(HSV_D, 0, rd, tmp, ctx);
 
 		emit_csrrsi(RV_REG_ZERO, SR_IE, CSR_STATUS, ctx);	
-		
-		emit(rv_fence(0x3, 0x3), ctx);
 	      }
 	      else {
-		emit(rv_fence(0x3, 0x3), ctx);
+		emit_csrrsi(RV_REG_ZERO, SR_IE, CSR_STATUS, ctx);	
 		emit_hvmi(HLV_W, tmp, rd, 0, ctx);
 		emit_add(RV_REG_T1, tmp, rs, ctx);
 		emit_hvmi(HSV_W, 0, rd, RV_REG_T1, ctx);	
-		emit(rv_fence(0x3, 0x3), ctx);
+		emit_csrrsi(RV_REG_ZERO, SR_IE, CSR_STATUS, ctx);	
 	      }
 	      break;
 	    default:
@@ -2178,72 +2128,29 @@ void bpf_jit_build_prologue(struct rv_jit_context *ctx)
 		emit_sd(RV_REG_SP, store_offset, RV_REG_S6, ctx);
 		store_offset -= 8;
 	}
+
 	/* JARA: Write hgatp for bpf program */
-	if (gbpf_ready && ctx->prog->aux->gbpf_page) {
-	  emit(rv_nop(), ctx);
-	  
-	  // pr_info("gpgd_phys : %0llx\n", page_to_phys(ctx->prog->aux->gpgd));
-	  
+	if (gbpf_ready && ctx->prog->aux->gaux->gbpf_page) {
+	  /* HGAT Setup */
 	  u64 hgatp = ctx->prog->aux->vmid;
 	  hgatp = hgatp << HGATP_VMID_SHIFT;
-	  hgatp |= HGATP_MODE_SV48X4 << HGATP_MODE_SHIFT;
-	  hgatp |= ((page_to_phys(ctx->prog->aux->gpgd) >> PAGE_SHIFT) & HGATP_PPN);
+	  hgatp |= HGATP_MODE_SV39X4 << HGATP_MODE_SHIFT;
+	  hgatp |= ((page_to_phys(ctx->prog->aux->gaux->gpgd) >> PAGE_SHIFT) & HGATP_PPN);
 	  
-	  // pr_info("HGATP: %0llx\n", hgatp);
-	  
-	  // Backup S11 and S10 reg
-	  /*
-	  emit_sd(RV_REG_SP, store_offset, RV_REG_S11, ctx);
-	  store_offset -= 8;
-	  emit_sd(RV_REG_SP, store_offset, RV_REG_S10, ctx);
-	  store_offset -= 8;
-	  emit_addi(RV_REG_S10, RV_REG_SP, 0, ctx);
-	  */
+	  // Backup S11 and S10 save GAXU reg
 	  emit_sd(RV_REG_SP, GBPF_STK_SAVE_S11, RV_REG_S11, ctx);
 	  emit_sd(RV_REG_SP, GBPF_STK_SAVE_S10, RV_REG_S10, ctx);
+	  emit_sd(RV_REG_SP, GBPF_STK_SAVE_GAUX, RV_REG_A0, ctx);
 
 	  emit_addi(RV_REG_S10, RV_REG_SP, 0, ctx);   /* mv s10, sp */
 	  
 	  // Read HGATP to S11 and backup HGATP to kernel SP
-	  /*
-	  emit_csrw(RV_REG_S11, 0, RV_CSR_HGATP, ctx);
-	  emit_sd(RV_REG_SP, store_offset, RV_REG_S11, ctx);
-	  store_offset -= 8;
-	  */
 	  emit_csrw(RV_REG_S11, 0, RV_CSR_HGATP, ctx);
 	  emit_sd(RV_REG_S10, GBPF_STK_OLD_HGATP, RV_REG_S11, ctx);
 
-	  /*
-	   * Stash fixed page bases into frame slots.
-	   * These are later read by helper trampoline / memory access paths.
-	   */
-	  emit_sd(RV_REG_S10, GBPF_ORG_CTX, RV_REG_A0, ctx);  
-
-	  emit_imm(RV_REG_T0, (u64)page_to_virt(ctx->prog->aux->gbpf_page), ctx);
-	  emit_sd(RV_REG_S10, GBPF_STK_CTX_BASE, RV_REG_T0, ctx);
-	  
-	  if (ctx->prog->aux->gbpf_pkt_page) {
-	    emit_imm(RV_REG_T0, (u64)page_to_virt(ctx->prog->aux->gbpf_pkt_page), ctx);
-	    emit_sd(RV_REG_S10, GBPF_STK_PKT_BASE, RV_REG_T0, ctx);
-	  }
-	  
-	    
-	  if (ctx->prog->aux->used_map_cnt) {
-
-#ifdef GBPF_DEBUG
-	    struct bpf_map *map = (struct bpf_map *)ctx->prog->aux->used_maps[0];
-	    pr_info("prog->aux->used_maps : %px, %px\n", 
-		    map, map->gbpf_alloc_base);
-#endif
-	    
-	    emit_imm(RV_REG_T0, (u64)(ctx->prog->aux->used_maps[0]), ctx);
-	    emit_sd(RV_REG_S10, GBPF_STK_MAP_BASE, RV_REG_T0, ctx);
-	  }
-	  
-	  //emit_imm(RV_REG_T0, (u64)ctx->prog->aux->orig_ctx, ctx);
-	  //emit_sd(RV_REG_S10, GBPF_ORG_CTX, RV_REG_T0, ctx);  
-
 	  emit_imm(RV_REG_A0, GBPF_CTX_BASE, ctx);
+
+	  
 	  /*
 	   * Switch HGATP to GBPF page-table.
 	   */
@@ -2255,23 +2162,12 @@ void bpf_jit_build_prologue(struct rv_jit_context *ctx)
 	   */
 	  emit_imm(RV_REG_S5, GBPF_CTX_BASE + PAGE_SIZE, ctx);
 
-	  // pr_info("GBPF page base: %px\n", page_to_virt(ctx->prog->aux->gbpf_page));
-
 	  if (bpf_stack_adjust) {
 	    ctx->prog->aux->bpf_stack_adjust = bpf_stack_adjust;
 	  }
-
-	  // Test code
-	  /*
-	  emit_addi(RV_REG_S5, RV_REG_S5, -8, ctx);
-	  emit_hvmi(HSV_D, 0, RV_REG_S5, RV_REG_S5, ctx);
-	  emit_hvmi(HLV_D, RV_REG_S5, RV_REG_S5, 0, ctx);
-	  emit_addi(RV_REG_S5, RV_REG_S5, 8, ctx);
-	  */
-	  
-	  emit(rv_nop(), ctx);
 	}
 	/* End of JARA */
+
 
 	emit_addi(RV_REG_FP, RV_REG_SP, stack_adjust, ctx);
 
