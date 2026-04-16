@@ -2160,7 +2160,7 @@ void bpf_jit_build_prologue(struct rv_jit_context *ctx)
 	  //emit_sd(RV_REG_S10, GBPF_STK_OLD_HGATP, RV_REG_S11, ctx);
 	  emit_sd(RV_REG_SP, GBPF_STK_OLD_HGATP, RV_REG_S11, ctx);
 
-	  emit_imm(RV_REG_A0, GBPF_CTX_BASE, ctx);
+	  //emit_imm(RV_REG_A0, GBPF_CTX_BASE, ctx);
 
 	  
 	  /*
