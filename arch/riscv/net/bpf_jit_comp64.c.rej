@@ -1,0 +1,81 @@
+diff a/arch/riscv/net/bpf_jit_comp64.c b/arch/riscv/net/bpf_jit_comp64.c	(rejected hunks)
+@@ -13,6 +13,10 @@
+ #include <asm/patch.h>
+ #include "bpf_jit.h"
+ 
++
++#include <linux/bpf_map.h>
++#include <linux/bpf_sandbox.h> 
++
+ #define RV_REG_TCC RV_REG_A6
+ #define RV_REG_TCC_SAVED RV_REG_S6 /* Store A6 in S6 if program do calls */
+ 
+@@ -236,7 +350,9 @@ static void __build_epilogue(bool is_tail_call, struct rv_jit_context *ctx)
+ 		store_offset -= 8;
+ 	}
+ 
++
+ 	emit_addi(RV_REG_SP, RV_REG_SP, stack_adjust, ctx);
++	
+ 	/* Set return value. */
+ 	if (!is_tail_call)
+ 		emit_mv(RV_REG_A0, RV_REG_A5, ctx);
+@@ -1038,6 +1155,16 @@ int bpf_jit_emit_insn(const struct bpf_insn *insn, struct rv_jit_context *ctx,
+ 		emit_mv(rd, rs, ctx);
+ 		if (!is64 && !aux->verifier_zext)
+ 			emit_zext_32(rd, ctx);
++
++#ifdef CONFIG_BPF_SFI_MAP_MASKING
++		if (is_sandboxed && is_map_reg(ctx->prog, rs)) {
++			bitmap_set(ctx->prog->map_info->map_reg_bitmap, rd, 1);
++			// pr_info("dst %d = src %d", dst, src);
++		} else if (is_sandboxed && is_map_reg(ctx->prog, rd)) {
++			bitmap_clear(ctx->prog->map_info->map_reg_bitmap, rd, 1);
++		}
++#endif /* CONFIG_BPF_SFI_MAP_MASKING */
++
+ 		break;
+ 
+ 	/* dst = dst OP src */
+@@ -1486,6 +1651,41 @@ int bpf_jit_emit_insn(const struct bpf_insn *insn, struct rv_jit_context *ctx,
+ 	case BPF_LDX | BPF_PROBE_MEM | BPF_DW:
+ 	{
+ 		int insn_len, insns_start;
++#ifdef CONFIG_BPF_SFI_MASK_READ
++		if (is_sandboxed) {
++			u8 masked_addr_reg;
++
++			// pr_info("READ: src = %d to dst = %d", src, dst);
++
++#ifdef CONFIG_BPF_SFI_MAP_MASKING
++			if (is_map_reg(ctx->prog, rs)
++				&& ctx->prog->map_info->current_active_map) {
++				bitmap_set(ctx->prog->map_info->map_reg_bitmap, rd, 1);
++				masked_addr_reg = emit_sfi(rs, off, ctx, true);
++			} else if (is_map_reg(ctx->prog, rd)
++					   && ctx->prog->map_info->current_active_map) {
++				bitmap_clear(ctx->prog->map_info->map_reg_bitmap, rd, 1);
++				masked_addr_reg = emit_sfi(rd, off, ctx, false);
++			} else
++#endif /* CONFIG_BPF_SFI_MAP_MASKING */
++			masked_addr_reg = emit_sfi(rs, off, ctx, false);
++
++			switch (BPF_SIZE(code)) {
++			case BPF_W:
++				emit(rv_lwu(rd, 0, masked_addr_reg), ctx);
++				break;
++			case BPF_H:
++				emit(rv_lhu(rd, 0, masked_addr_reg), ctx);
++				break;
++			case BPF_B:
++				emit(rv_lbu(rd, 0, masked_addr_reg), ctx);
++				break;
++			case BPF_DW:
++				emit(rv_ld(rd, 0, masked_addr_reg), ctx);
++				break;
++			}
++		} else {
++#endif /* CONFIG_BPF_SFI_MASK_READ */
+ 
+ 		switch (BPF_SIZE(code)) {
+ 		case BPF_B:

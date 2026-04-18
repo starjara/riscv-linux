@@ -1,0 +1,11 @@
+diff a/net/core/filter.c b/net/core/filter.c	(rejected hunks)
+@@ -82,6 +82,9 @@
+ #include <net/mptcp.h>
+ #include <net/netfilter/nf_conntrack_bpf.h>
+ 
++#include <linux/bpf_mte.h>
++#include <linux/bpf_sandbox.h>
++
+ static const struct bpf_func_proto *
+ bpf_sk_base_func_proto(enum bpf_func_id func_id);
+ 

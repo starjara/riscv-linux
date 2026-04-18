@@ -1,0 +1,105 @@
+diff a/arch/x86/net/bpf_jit_comp.c b/arch/x86/net/bpf_jit_comp.c	(rejected hunks)
+@@ -964,7 +1070,7 @@ static void emit_shiftx(u8 **pprog, u32 dst_reg, u8 src_reg, bool is64, u8 op)
+ #define INSN_SZ_DIFF (((addrs[i] - addrs[i - 1]) - (prog - temp)))
+ 
+ static int do_jit(struct bpf_prog *bpf_prog, int *addrs, u8 *image, u8 *rw_image,
+-		  int oldproglen, struct jit_context *ctx, bool jmp_padding)
++		  int oldproglen, struct jit_context *ctx, bool jmp_padding, struct inst_info *info)
+ {
+ 	bool tail_call_reachable = bpf_prog->aux->tail_call_reachable;
+ 	struct bpf_insn *insn = bpf_prog->insnsi;
+@@ -1031,6 +1152,12 @@ static int do_jit(struct bpf_prog *bpf_prog, int *addrs, u8 *image, u8 *rw_image
+ 			emit_mov_reg(&prog,
+ 				     BPF_CLASS(insn->code) == BPF_ALU64,
+ 				     dst_reg, src_reg);
++			#ifdef CONFIG_BPF_SFI_MAP_MASKING
++			if (is_sandboxed && is_map_reg(bpf_prog, src_reg))
++				bitmap_set(bpf_prog->map_info->map_reg_bitmap, dst_reg, 1);
++			else if (is_sandboxed && is_map_reg(bpf_prog, dst_reg))
++				bitmap_clear(bpf_prog->map_info->map_reg_bitmap, dst_reg, 1);
++			#endif /* CONFIG_BPF_SFI_MAP_MASKING */
+ 			break;
+ 
+ 			/* neg dst */
+@@ -1415,7 +1578,42 @@ st:			if (is_imm8(insn->off))
+ 				start_of_ldx = prog;
+ 				end_of_jmp[-1] = start_of_ldx - end_of_jmp;
+ 			}
+-			emit_ldx(&prog, BPF_SIZE(insn->code), dst_reg, src_reg, insn_off);
++			/*** SANDBOX BPF START ***/
++			#ifdef CONFIG_BPF_SFI_MASK_READ
++			if (is_sandboxed) {
++				#ifdef CONFIG_BPF_SFI_MAP_MASKING
++				if (bpf_prog->map_info->current_active_map
++					&& is_map_reg(bpf_prog, src_reg)) {
++					bitmap_set(bpf_prog->map_info->map_reg_bitmap, dst_reg, 1);
++					emit_sfi(bpf_prog, &prog, BPF_SIZE(insn->code), src_reg,
++							dst_reg, insn->off,
++							bpf_prog->aux->stack_depth, true);
++				} else if (bpf_prog->map_info->current_active_map
++					&& is_map_reg(bpf_prog, dst_reg)) {
++					bitmap_clear(bpf_prog->map_info->map_reg_bitmap,
++								 dst_reg, 1);
++					emit_sfi(bpf_prog, &prog, BPF_SIZE(insn->code), src_reg,
++						dst_reg, insn->off,
++						bpf_prog->aux->stack_depth, false);
++				} else
++				#endif /* CONFIG_BPF_SFI_MAP_MASKING */
++				emit_sfi(bpf_prog, &prog, BPF_SIZE(insn->code), src_reg,
++						dst_reg, insn->off,
++						bpf_prog->aux->stack_depth, false);
++			}
++			#endif
++
++			#ifdef CONFIG_BPF_SFI_MASK_READ
++				if (is_sandboxed)
++					emit_ldx(&prog, BPF_SIZE(insn->code),
++							dst_reg, X86_REG_R9, 0);
++				else
++					emit_ldx(&prog, BPF_SIZE(insn->code),
++							dst_reg, src_reg, insn_off);
++			#else
++				emit_ldx(&prog, BPF_SIZE(insn->code), dst_reg, src_reg, insn_off);
++			#endif
++			/*** SANDBOX BPF END ***/
+ 			if (BPF_MODE(insn->code) == BPF_PROBE_MEM) {
+ 				struct exception_table_entry *ex;
+ 				u8 *_insn = image + proglen + (start_of_ldx - temp);
+@@ -1535,8 +1733,36 @@ st:			if (is_imm8(insn->off))
+ 			/* call */
+ 		case BPF_JMP | BPF_CALL: {
+ 			int offs;
+-
+ 			func = (u8 *) __bpf_call_base + imm32;
++			/*** SANDBOX BPF START ***/
++			#ifdef CONFIG_BPF_SFI_MAP_MASKING
++			if (is_sandboxed) {
++				if (is_map_lookup((u64)func)) {
++					bpf_prog->map_info->is_map_lookup_invoked = true;
++					bitmap_set(bpf_prog->map_info->map_reg_bitmap,
++							   BPF_REG_0, 1);
++					// pr_info("BPF JIT: lookup invoked, map in rax");
++				} else {
++					bitmap_clear(bpf_prog->map_info->map_reg_bitmap,
++							   BPF_REG_0, 1);
++					bpf_prog->map_info->is_map_lookup_invoked = false;
++				}
++			}
++			#endif /* CONFIG_BPF_SFI_MAP_MASKING */
++			#if defined(CONFIG_BPF_SANDBOX_CTX) || \
++				defined(CONFIG_BPF_SFI_TRAMPOLINE)
++				if (is_sandboxed) {
++					// mov $0x[prog_type], %r9 (7 bytes)
++					EMIT3_off32(0x49, 0xc7, 0xc1, bpf_prog->type);
++					// movabs $[func addr] %r11 (10 bytes)
++					EMIT2_off64(0x49, 0xBB, (u64)func);
++					// 17 bytes for copying the prog_type
++					// and helper function address
++					sandbox_ilen = 17;
++					func = (u8 *)&sandbox_tramp;
++				}
++			#endif /* CONFIG_BPF_SANDBOX_CTX || CONFIG_BPF_SFI_TRAMPOLINE */
++			/*** SANDBOX BPF END ***/
+ 			if (tail_call_reachable) {
+ 				/* mov rax, qword ptr [rbp - rounded_stack_depth - 8] */
+ 				EMIT3_off32(0x48, 0x8B, 0x85,

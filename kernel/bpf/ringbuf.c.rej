@@ -1,0 +1,13 @@
+diff a/kernel/bpf/ringbuf.c b/kernel/bpf/ringbuf.c	(rejected hunks)
+@@ -411,6 +418,11 @@ static void *__bpf_ringbuf_reserve(struct bpf_ringbuf *rb, u64 size)
+ 	unsigned long cons_pos, prod_pos, new_prod_pos, flags;
+ 	u32 len, pg_off;
+ 	struct bpf_ringbuf_hdr *hdr;
++	#ifdef CONFIG_BPF_SANDBOX_MEMORY_MANAGEMENT
++		void *sandbox_reserve;
++		bool caller_sandboxed = is_caller_sandboxed();
++	#endif
++
+ 
+ 	if (unlikely(size > RINGBUF_MAX_RECORD_SZ))
+ 		return NULL;

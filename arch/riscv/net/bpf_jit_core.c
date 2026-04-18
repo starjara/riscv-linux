@@ -12,10 +12,11 @@
 #include <asm/patch.h>
 #include "bpf_jit.h"
 
+#include <linux/bpf_map.h>
 /* Number of iterations to try until offsets converge. */
 #define NR_JIT_ITERATIONS	32
 
-static int build_body(struct rv_jit_context *ctx, bool extra_pass, int *offset)
+static int build_body(struct rv_jit_context *ctx, bool extra_pass, int *offset, bool is_sandboxed)
 {
 	const struct bpf_prog *prog = ctx->prog;
 	int i;
@@ -24,7 +25,7 @@ static int build_body(struct rv_jit_context *ctx, bool extra_pass, int *offset)
 		const struct bpf_insn *insn = &prog->insnsi[i];
 		int ret;
 
-		ret = bpf_jit_emit_insn(insn, ctx, extra_pass);
+		ret = bpf_jit_emit_insn(insn, ctx, extra_pass, is_sandboxed);
 		/* BPF_LD | BPF_IMM | BPF_DW: skip the next instruction. */
 		if (ret > 0)
 			i++;
@@ -49,6 +50,16 @@ struct bpf_prog *bpf_int_jit_compile(struct bpf_prog *prog)
 	int pass = 0, prev_ninsns = 0, i;
 	struct rv_jit_data *jit_data;
 	struct rv_jit_context *ctx;
+
+#ifndef CONFIG_BPF_SANDBOX
+	bool is_sandboxed = 0;
+#else
+	bool is_sandboxed = IS_SANDBOX_ENABLED(prog->type);
+#endif /* CONFIG_BPF_SANDBOX */
+
+#ifdef CONFIG_BPF_SFI_MAP_MASKING
+	bpf_sandbox_map_info_init(prog);
+#endif /* CONFIG_BPF_SFI_MAP_MASKING */
 
 	if (!prog->jit_requested)
 		return orig_prog;
@@ -86,7 +97,7 @@ struct bpf_prog *bpf_int_jit_compile(struct bpf_prog *prog)
 		goto out_offset;
 	}
 
-	if (build_body(ctx, extra_pass, NULL)) {
+	if (build_body(ctx, extra_pass, NULL, is_sandboxed)) {
 		prog = orig_prog;
 		goto out_offset;
 	}
@@ -100,16 +111,16 @@ struct bpf_prog *bpf_int_jit_compile(struct bpf_prog *prog)
 		pass++;
 		ctx->ninsns = 0;
 
-		bpf_jit_build_prologue(ctx);
+		bpf_jit_build_prologue(ctx, is_sandboxed);
 		ctx->prologue_len = ctx->ninsns;
 
-		if (build_body(ctx, extra_pass, ctx->offset)) {
+		if (build_body(ctx, extra_pass, ctx->offset, is_sandboxed)) {
 			prog = orig_prog;
 			goto out_offset;
 		}
 
 		ctx->epilogue_offset = ctx->ninsns;
-		bpf_jit_build_epilogue(ctx);
+		bpf_jit_build_epilogue(ctx, is_sandboxed);
 
 		if (ctx->ninsns == prev_ninsns) {
 			if (jit_data->header)
@@ -160,12 +171,12 @@ skip_init_ctx:
 	ctx->ninsns = 0;
 	ctx->nexentries = 0;
 
-	bpf_jit_build_prologue(ctx);
-	if (build_body(ctx, extra_pass, NULL)) {
+	bpf_jit_build_prologue(ctx, is_sandboxed);
+	if (build_body(ctx, extra_pass, NULL, is_sandboxed)) {
 		prog = orig_prog;
 		goto out_free_hdr;
 	}
-	bpf_jit_build_epilogue(ctx);
+	bpf_jit_build_epilogue(ctx, is_sandboxed);
 
 	if (bpf_jit_enable > 1)
 		bpf_jit_dump(prog->len, prog_size, pass, ctx->insns);

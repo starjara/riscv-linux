@@ -35,6 +35,7 @@
 #include <linux/rcupdate_trace.h>
 #include <linux/memcontrol.h>
 #include <linux/trace_events.h>
+#include <linux/bpf_ctx.h>
 #include <net/netfilter/nf_bpf_link.h>
 
 #include <net/tcx.h>
@@ -2738,6 +2739,10 @@ static int bpf_prog_load(union bpf_attr *attr, bpfptr_t uattr, u32 uattr_size)
 			       sizeof(attr->prog_name));
 	if (err < 0)
 		goto free_prog_sec;
+
+	/*** SANDBOX BPF START ***/
+	bpf_ctx_bitmap_alloc(prog, type);
+	/*** SANDBOX BPF END ***/
 
 	/* run eBPF verifier */
 	err = bpf_check(&prog, attr, uattr, uattr_size);
