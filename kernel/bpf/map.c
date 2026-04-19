@@ -186,7 +186,7 @@ static int __init init_bpf_map_env(void)
 		hash_init(bpf_map_env->lookup_func_ht);
 		hash_init(bpf_map_env->active_map_ht);
 	}
-	pr_info("BPF Sandbox: htabs for map initialized at %llx", (u64)bpf_map_env);
+//	pr_info("BPF Sandbox: htabs for map initialized at %llx", (u64)bpf_map_env);
 	return 0;
 }
 

@@ -21,7 +21,7 @@ static void bpf_sandbox_add_sync_pair(u64 copy, u64 to_sync)
 			return;
 		}
 	}
-	pr_info("BPF Sandbox: Insufficient space to store sync pairs.");
+//	pr_info("BPF Sandbox: Insufficient space to store sync pairs.");
 }
 
 static void bpf_sandbox_remove_sync_pair(u64 copy)
@@ -33,7 +33,7 @@ static void bpf_sandbox_remove_sync_pair(u64 copy)
 			return;
 		}
 	}
-	pr_info("BPF Sandbox: %llx not synced, unable to remove from sync pairs.", copy);
+//	pr_info("BPF Sandbox: %llx not synced, unable to remove from sync pairs.", copy);
 }
 
 // Allocate and return the previous program break, which also points to the new
@@ -59,7 +59,7 @@ void *bpf_sandbox_get_kernel_ptr(u64 sandbox_ptr)
 	for (int i = 0; i < MAX_SYNC_PAIRS; i++)
 		if (current_sandbox_info->sync_pairs[i].sandbox_ptr == sandbox_ptr)
 			return (void *)current_sandbox_info->sync_pairs[i].kernel_ptr;
-	pr_info("BPF Sandbox: Fail to find a match for sandbox ptr %llx.", sandbox_ptr);
+//	pr_info("BPF Sandbox: Fail to find a match for sandbox ptr %llx.", sandbox_ptr);
 	return NULL;
 }
 

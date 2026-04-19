@@ -233,7 +233,7 @@ EXPORT_SYMBOL(sandbox_tramp);
 u64 sandbox_tramp(volatile u64 r1, volatile u64 r2, volatile u64 r3, volatile u64 r4,
 		   volatile u64 r5)
 {
-	pr_info("Entering sandbox_tramp.\n");
+//	pr_info("Entering sandbox_tramp.\n");
 	u64 prog_id;
 	volatile u64 call_target = bpf_sandbox_get_trampoline_target(&prog_id);
 
@@ -250,7 +250,7 @@ u64 sandbox_tramp(volatile u64 r1, volatile u64 r2, volatile u64 r3, volatile u6
 		return 0;
 #endif /* CONFIG_BPF_SFI_TRAMPOLINE */
 
-	pr_info("Calling Helper.\n");
+//	pr_info("Calling Helper.\n");
 	// Call the valid helper function
 	return bpf_sandbox_call_trampoline_target(call_target, r1, r2, r3, r4, r5);
 }
@@ -477,9 +477,9 @@ EXPORT_SYMBOL(sandbox_ctx);
  */
 static int __init init_bpf_sandbox(void)
 {
-	pr_info("BPF Sandbox: Core %d initializing sandbox management ...", smp_processor_id());
+//	pr_info("BPF Sandbox: Core %d initializing sandbox management ...", smp_processor_id());
 	sandboxes = kmalloc(BPF_SANDBOX_TOTAL_SIZE * nr_cpu_ids, GFP_ATOMIC);
-	pr_info("BPF Sandbox: Core %d initializing sandbox management at %px ...", smp_processor_id(), sandboxes);
+//	pr_info("BPF Sandbox: Core %d initializing sandbox management at %px ...", smp_processor_id(), sandboxes);
 	if (!sandboxes)
 		panic("BPF Sandbox: could not allocate sandboxes");
 
@@ -492,7 +492,7 @@ static int __init init_bpf_sandbox(void)
 #endif                 /* CONFIG_BPF_SANDBOX_MTE */
 	}
 
-	pr_info("BPF Sandbox: sandbox management initialized.");
+//	pr_info("BPF Sandbox: sandbox management initialized.");
 	return 0;
 }
 

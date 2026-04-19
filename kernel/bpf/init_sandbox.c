@@ -9,7 +9,7 @@ void *sandbox_alloc(const struct bpf_prog *prog, const void *kernel_ctx)
 {
         size_t ctx_size;
 
-        pr_info("Sandbox allocation\n");
+//        pr_info("Sandbox allocation\n");
 
         if (kernel_ctx) {
                 ctx_size = bpf_ctx_size_map[prog->type]; // TODO: change this to bpf ctx size
