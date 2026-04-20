@@ -2134,7 +2134,7 @@ void bpf_jit_build_prologue(struct rv_jit_context *ctx)
 	  /* HGAT Setup */
 	  u64 hgatp = ctx->prog->aux->vmid;
 	  hgatp = hgatp << HGATP_VMID_SHIFT;
-	  hgatp |= HGATP_MODE_SV39X4 << HGATP_MODE_SHIFT;
+	  hgatp |= HGATP_MODE_SV48X4 << HGATP_MODE_SHIFT;
 	  hgatp |= ((page_to_phys(ctx->prog->aux->gaux->gpgd) >> PAGE_SHIFT) & HGATP_PPN);
 	  
 	  // Backup S11 and S10 save GAXU reg
