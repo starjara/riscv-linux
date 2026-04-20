@@ -613,6 +613,11 @@ static __always_inline u32 __bpf_prog_run(const struct bpf_prog *prog,
 		// ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
 		/* JARA: copy ctx, call dfunc, delete ctx  */
 		ret = dfunc(run_ctx, prog->insnsi, prog->bpf_func);
+		if (sandboxed && prog->type == BPF_PROG_TYPE_SOCKET_FILTER) {
+		  struct sk_buff *shadow = page_to_virt(prog->aux->gaux->gbpf_page);
+		  struct sk_buff *ctx = (struct sk_buff *)ctx;
+		  memcpy(ctx, shadow, sizeof(*ctx));
+		}
 		/* End of JARA */
 
 		stats = this_cpu_ptr(prog->stats);
@@ -623,6 +628,11 @@ static __always_inline u32 __bpf_prog_run(const struct bpf_prog *prog,
 	} else {
 	  //ret = dfunc(ctx, prog->insnsi, prog->bpf_func);
 	  ret = dfunc(run_ctx, prog->insnsi, prog->bpf_func);
+	  if (sandboxed && prog->type == BPF_PROG_TYPE_SOCKET_FILTER) {
+	    struct sk_buff *shadow = page_to_virt(prog->aux->gaux->gbpf_page);
+	    struct sk_buff *ctx = (struct sk_buff *)ctx;
+	    memcpy(ctx, shadow, sizeof(*ctx));
+	  }
 	}
 	return ret;
 }
