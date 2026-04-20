@@ -52,6 +52,7 @@ struct gbpf_ops {
   int (*create_pgd)(struct bpf_prog *prog);
   int (*map)(struct bpf_prog *prog);
   int (*map_ext)(const struct bpf_prog *prog, const void *kaddr, size_t len, enum GBPF_MAP_TYPE type, int map_num, int cpu);
+  int (*map_ext_addr)(const struct bpf_prog *prog, const void *kaddr, size_t len, u64 gpa, int map_num, int cpu);
   void (*destroy_pgtable)(struct bpf_prog *prog);
   u32 (*get_vmid)(void);
   void (*inc_vmid)(void);
@@ -69,6 +70,7 @@ int gbpf_call_check_module(void);
 int gbpf_call_create_pgd(struct bpf_prog *prog);
 int gbpf_call_map(struct bpf_prog *prog);
 int gbpf_call_map_ext(const struct bpf_prog *prog, const void *kaddr, size_t len, enum GBPF_MAP_TYPE type, int map_num, int cpu);
+int gbpf_call_map_ext_addr(const struct bpf_prog *prog, const void *kaddr, size_t len, u64 gpa, int map_num, int cpu);
 void gbpf_call_destroy_pgtable(struct bpf_prog *prog);
 u32 gbpf_call_get_vmid(void);
 void gbpf_call_inc_vmid(void);
@@ -82,6 +84,9 @@ u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5
 // Map functions
 int gbpf_try_encode_kernel_map_ptr(u64 kptr, struct bpf_prog *prog, u64 *out);
 int gbpf_init_prog_map_descs(struct bpf_prog *prog);
+
+// gaux free
+void gbpf_aux_free(struct bpf_prog_aux *aux);
 
 
 static inline u64 gbpf_encode_map_addr(u32 map_slot, u32 cpu_slot, u64 offset)

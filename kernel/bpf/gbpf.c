@@ -7,6 +7,20 @@
 
 // #define GBPF_DEBUG 1;
 
+void gbpf_aux_free(struct bpf_prog_aux *aux)
+{
+	if (!aux || !aux->gaux)
+		return;
+
+	if (aux->gaux->gpgd)
+		gbpf_call_destroy_pgtable(aux->prog);
+
+	kfree(aux->gaux->gbpf_maps);
+
+	kfree(aux->gaux);
+	aux->gaux = NULL;
+}
+
 static void *gbpf_pkt_page_base(const void *ptr)
 {
 	return (void *)((unsigned long)ptr & PAGE_MASK);
