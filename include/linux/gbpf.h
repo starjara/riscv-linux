@@ -20,7 +20,7 @@
 
 #define GBPF_STK_SAVE_S11       0
 #define GBPF_STK_SAVE_S10       8
-#define GBPF_STK_SAVE_GAUX       16
+#define GBPF_STK_SAVE_GAUX     16
 #define GBPF_STK_OLD_HGATP     24
 #define GBPF_TR_FRAME_SIZE     32
 

@@ -111,11 +111,16 @@ static u64 gbpf_call_helper_generic(struct gbpf_aux *gaux, u64 call_target,
   pr_info("Orig_ctx : 0x%lx", gaux->orig_ctx); 
 #endif
 	
-  arg1 = gbpf_from_gbpf_space_to_kernel(gaux, arg1, meta);
-  arg2 = gbpf_from_gbpf_space_to_kernel(gaux, arg2, meta);
-  arg3 = gbpf_from_gbpf_space_to_kernel(gaux, arg3, meta);
-  arg4 = gbpf_from_gbpf_space_to_kernel(gaux, arg4, meta);
-  arg5 = gbpf_from_gbpf_space_to_kernel(gaux, arg5, meta);
+  if (arg1 != 0)
+    arg1 = gbpf_from_gbpf_space_to_kernel(gaux, arg1, meta);
+  if (arg2 != 0)
+    arg2 = gbpf_from_gbpf_space_to_kernel(gaux, arg2, meta);
+  if (arg3 != 0)
+    arg3 = gbpf_from_gbpf_space_to_kernel(gaux, arg3, meta);
+  if (arg4 != 0)
+    arg4 = gbpf_from_gbpf_space_to_kernel(gaux, arg4, meta);
+  if (arg5 != 0)
+    arg5 = gbpf_from_gbpf_space_to_kernel(gaux, arg5, meta);
 	
 #ifdef GBPF_DEBUG
   pr_info("Arg marshaling done\n");
@@ -134,10 +139,12 @@ static u64 gbpf_convert_helper_ret(u64 ret, struct gbpf_aux *gaux, const map_add
 {
   LOG_E;
   
+  /*
   if (!ret)
     return ret;
 
   if (virt_addr_valid(ret)) {
+  */
     struct gbpf_map_desc *map_desc = (struct gbpf_map_desc *)gaux->gbpf_maps;
     struct gbpf_map_desc *d = &map_desc[meta->map_slot];
     struct bpf_map *map = (struct bpf_map *)d->map;
@@ -172,7 +179,9 @@ static u64 gbpf_convert_helper_ret(u64 ret, struct gbpf_aux *gaux, const map_add
 #endif
       ret = GBPF_MAP_BASE + off;
     }
+    /*
   }
+    */
 
   return ret;
  
@@ -207,11 +216,19 @@ noinline u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4,
   pr_info("[GBPF] Tramptest ret_before = 0x%lx\n", ret);
 #endif
 
-  ret = gbpf_convert_helper_ret(ret, gaux, &meta);
+  if (ret != 0)
+    ret = gbpf_convert_helper_ret(ret, gaux, &meta);
 
 #ifdef GBPF_DEBUG
   pr_info("[GBPF] Tramptest ret_after = 0x%lx\n", ret);
 #endif
+
+  asm volatile (
+		"mv t4, %0\n\t"
+		: "=r"(gaux)
+		:
+		:);
+
 
   
   return ret;

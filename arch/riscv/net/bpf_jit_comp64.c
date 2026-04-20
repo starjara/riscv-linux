@@ -263,19 +263,23 @@ static void __build_epilogue(bool is_tail_call, struct rv_jit_context *ctx)
 	   * S10 is still the fixed trampoline/frame base here.
 	   * Restore old HGATP first.
 	   */
-	  emit_ld(RV_REG_S11, GBPF_STK_OLD_HGATP, RV_REG_S10, ctx);
-	  emit_csrw(0, RV_REG_S11, RV_CSR_HGATP, ctx);
+	  emit_ld(RV_REG_T5, GBPF_STK_OLD_HGATP, RV_REG_SP, ctx);
+	  emit_csrw(0, RV_REG_T5, RV_CSR_HGATP, ctx);
 	  
 	  /*
 	   * Restore saved S11 from frame slot.
 	   */
+	  /*
 	  emit_ld(RV_REG_S11, GBPF_STK_SAVE_S11, RV_REG_S10, ctx);
+	  */
 	  
 	  /*
 	   * Restore saved S10 last.
 	   * After this point S10-based frame slots must not be accessed anymore.
 	   */
+	  /*
 	  emit_ld(RV_REG_S10, GBPF_STK_SAVE_S10, RV_REG_S10, ctx);
+	  */
 
 	  
 	}
@@ -1575,7 +1579,7 @@ out_be:
 		    return ret;
 
 		  // S11 has call taget offset
-		  emit_imm(RV_REG_S11, insn->imm, ctx);
+		  emit_imm(RV_REG_T5, insn->imm, ctx);
 #ifdef GBPF_DEBUG 
 		  pr_info("helper_call_imm : 0x%llx\n", (u64)insn->imm);
 		  pr_info("helper_id(off)  : 0x%llx\n", (u64)insn->off);
@@ -2138,25 +2142,27 @@ void bpf_jit_build_prologue(struct rv_jit_context *ctx)
 	  hgatp |= ((page_to_phys(ctx->prog->aux->gaux->gpgd) >> PAGE_SHIFT) & HGATP_PPN);
 	  
 	  // Backup S11 and S10 save GAXU reg
-	  emit_sd(RV_REG_SP, GBPF_STK_SAVE_S11, RV_REG_S11, ctx);
-	  emit_sd(RV_REG_SP, GBPF_STK_SAVE_S10, RV_REG_S10, ctx);
-	  emit_sd(RV_REG_SP, GBPF_STK_SAVE_GAUX, RV_REG_A0, ctx);
+	  /*
+	  emit_sd(RV_REG_SP, GBPF_STK_SAVE_S11, RV_REG_T5, ctx);
+	  emit_sd(RV_REG_SP, GBPF_STK_SAVE_S10, RV_REG_T4, ctx);
+	  */
+	  
+	  // emit_sd(RV_REG_SP, GBPF_STK_SAVE_GAUX, RV_REG_A0, ctx);
 
-	  emit_addi(RV_REG_S10, RV_REG_SP, 0, ctx);   /* mv s10, sp */
+	  /*
+	  emit_addi(RV_REG_T5, RV_REG_SP, 0, ctx);   
+	  emit_sd(RV_REG_T5, GBPF_STK_SAVE_GAUX, RV_REG_A0, ctx);
+	  */
 	  
 	  // Read HGATP to S11 and backup HGATP to kernel SP
-	  emit_csrw(RV_REG_S11, 0, RV_CSR_HGATP, ctx);
-	  emit_sd(RV_REG_S10, GBPF_STK_OLD_HGATP, RV_REG_S11, ctx);
-
+	  emit_csrw(RV_REG_T5, 0, RV_CSR_HGATP, ctx);
+	  emit_sd(RV_REG_SP, GBPF_STK_OLD_HGATP, RV_REG_T5, ctx);
+	  emit_imm(RV_REG_T5, hgatp, ctx);
+	  emit_csrw(0, RV_REG_T5, RV_CSR_HGATP, ctx);
+	  
+	  emit_mv(RV_REG_T4, RV_REG_A0, ctx);
 	  emit_imm(RV_REG_A0, GBPF_CTX_BASE, ctx);
 
-	  
-	  /*
-	   * Switch HGATP to GBPF page-table.
-	   */
-	  emit_imm(RV_REG_S11, hgatp, ctx);
-	  emit_csrw(0, RV_REG_S11, RV_CSR_HGATP, ctx);
-	  
 	  /*
 	   * Initialize BPF virtual stack pointer.
 	   */
