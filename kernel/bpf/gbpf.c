@@ -32,15 +32,36 @@ static int gbpf_map_pkt_page(const struct bpf_prog *prog, const void *pkt_ptr)
 	int err;
 
 	pkt_page = gbpf_pkt_page_base(pkt_ptr);
+	/*
 	if (prog->aux->gaux->pkt_page == pkt_page)
 		return 0;
+	*/
 
-	//err = gbpf_call_map_ext(prog, pkt_page, PAGE_SIZE, PKT, 0, 0);
-	err = gbpf_call_map_ext_addr(prog, pkt_page, PAGE_SIZE, (u64)pkt_page, 0, 0);
+	err = gbpf_call_map_ext(prog, pkt_page, PAGE_SIZE, PKT, 0, 0);
 	if (err)
 		return err;
 
 	prog->aux->gaux->pkt_page = pkt_page;
+	return 0;
+}
+
+static int gbpf_map_ctx_page(const struct bpf_prog *prog, const void *ctx_ptr)
+{
+	void *ctx_page;
+	int err;
+
+	ctx_page = gbpf_pkt_page_base(ctx_ptr);
+	/*
+	if (prog->aux->gaux->pkt_page == pkt_page)
+		return 0;
+	*/
+
+	//err = gbpf_call_map_ext(prog, pkt_page, PAGE_SIZE, PKT, 0, 0);
+	err = gbpf_call_map_ext_addr(prog, ctx_page, PAGE_SIZE, (u64)ctx_page, 0, 0);
+	if (err)
+		return err;
+
+	// prog->aux->gaux->pkt_page = pkt_page;
 	return 0;
 }
 
@@ -305,8 +326,41 @@ static void *gbpf_copy_ctx_skb(const struct sk_buff *skb,
 	*/
   
   struct sk_buff *shadow;
+  u64 before;
+  u64 after; 
   shadow = page_to_virt(prog->aux->gaux->gbpf_page);
+
+  before = ktime_get();
   memcpy(shadow, skb, sizeof(*shadow));
+  memcpy(shadow, skb, sizeof(*shadow));
+  memcpy(shadow, skb, sizeof(*shadow));
+  memcpy(shadow, skb, sizeof(*shadow));
+  memcpy(shadow, skb, sizeof(*shadow));
+  memcpy(shadow, skb, sizeof(*shadow));
+  memcpy(shadow, skb, sizeof(*shadow));
+  memcpy(shadow, skb, sizeof(*shadow));
+  memcpy(shadow, skb, sizeof(*shadow));
+  memcpy(shadow, skb, sizeof(*shadow));
+  after = ktime_get();
+  pr_info("ctx copy: %llu ns", after - before);
+	 
+  before = ktime_get();
+  int err = gbpf_map_pkt_page(prog, skb->head);
+  err = gbpf_map_pkt_page(prog, skb->head);
+  err = gbpf_map_pkt_page(prog, skb->head);
+  err = gbpf_map_pkt_page(prog, skb->head);
+  err = gbpf_map_pkt_page(prog, skb->head);
+  err = gbpf_map_pkt_page(prog, skb->head);
+  err = gbpf_map_pkt_page(prog, skb->head);
+  err = gbpf_map_pkt_page(prog, skb->head);
+  err = gbpf_map_pkt_page(prog, skb->head);
+  err = gbpf_map_pkt_page(prog, skb->head);
+  if (err) {
+    pr_warn("[GBPF] Mapping failed\n");
+    return NULL;
+  }
+  after = ktime_get();
+  pr_info("ctx map: %llu ns", after - before);
 	 
   return (void *)skb;
   //return (void *)prog->aux->gaux;
