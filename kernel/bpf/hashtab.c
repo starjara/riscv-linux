@@ -685,31 +685,33 @@ static void *__htab_map_lookup_elem(struct bpf_map *map, void *key)
 	struct htab_elem *l;
 	u32 hash, key_size;
 
-	pr_info("\nhtab_map_lookup_elem\n");
+	// pr_info("\nhtab_map_lookup_elem\n");
 
 	WARN_ON_ONCE(!rcu_read_lock_held() && !rcu_read_lock_trace_held() &&
 		     !rcu_read_lock_bh_held());
 
-	pr_info("key : [%px] 0x%lx\n", key, *(u32 *)key);
+	// pr_info("key : [%px] 0x%lx\n", key, *(u32 *)key);
 
 	key_size = map->key_size;
 
 	hash = htab_map_hash(key, key_size, htab->hashrnd);
 
-	pr_info("hash : 0x%x\n", hash);
+	// pr_info("hash : 0x%x\n", hash);
 
 	head = select_bucket(htab, hash);
 
-	pr_info("head : %px\n", head);
+	// pr_info("head : %px\n", head);
 
 	l = lookup_nulls_elem_raw(head, hash, key, key_size, htab->n_buckets);
 
+	/*
 	if (l) {
 	  pr_info("elem.key : %lx\n", l->key);
 	  pr_info("value : %lx\n", l->key + round_up(map->key_size, 16));
 	}
 	else
 	  pr_info("Failed to get elem\n");
+	*/
 
 	return l;
 }

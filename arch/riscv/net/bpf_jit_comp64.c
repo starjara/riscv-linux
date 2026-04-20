@@ -190,6 +190,7 @@ static void emit_imm(u8 rd, s64 val, struct rv_jit_context *ctx)
 	struct bpf_map *map;
 
 	if (virt_addr_valid(val) && is_active_map(val)) {
+	  pr_info("Set active map\n");
 		map = (struct bpf_map *)val;
 		ctx->prog->map_info->current_active_map = map;
 	}
@@ -238,12 +239,56 @@ static inline u8 emit_sfi(u8 addr_reg, s16 off, struct rv_jit_context *ctx, bool
 
 #ifdef CONFIG_BPF_SFI_MASK_MAP_READ_WRITE
       // If masking not supported for a mask, skip emitting masking checks
+
+      /*
+      if (ctx->prog->map_info->current_active_map == NULL) {
+	pr_info("active map NULL\n");
+	return tmp;
+      }
+      else {
+	pr_info("emit sfi, is_map : %d\n", is_map);
+	pr_info("current active map %px\n", ctx->prog->map_info->current_active_map);
+      }
+      */
+
+      if (ctx->prog->aux->used_map_cnt) {
+	// pr_info("emit sfi, used_map_cnt : %d\n", ctx->prog->aux->used_map_cnt);
+	ctx->prog->map_info->current_active_map = ctx->prog->aux->used_maps[0];
+	// pr_info("Set current active map %px\n", ctx->prog->map_info->current_active_map);
+	// pr_info("map type : %u\n", ctx->prog->map_info->current_active_map->map_type);
+      }
+      else {
+	// pr_info("No map in prog\n");
+      }
+      
       if (!IS_MASKING_ENABLED_FOR_MAP(ctx->prog->map_info->current_active_map->map_type))
 	return tmp;
 
-      if (ctx->prog->map_info->current_active_map->sandbox_and_mask &&
-	  ctx->prog->map_info->current_active_map->sandbox_or_mask) {
-	// pr_info("EMIT SFI: array");
+      if (ctx->prog->map_info->current_active_map->map_type == BPF_MAP_TYPE_HASH) {
+	// pr_info("EMIT SFI: hashmap");
+	/* mov tmp, off */
+	emit_imm(tmp, off, ctx);
+	/* add tmp, addr_reg, off // load effective address */
+	emit_add(tmp, addr_reg, tmp, ctx);
+	/* sub tmp2, fp, (0x7f0 + 0x30) // location of the map's AND mask */
+	emit_imm(tmp2, (0x7f0 + 0x30) * -1, ctx);
+	emit_add(tmp2, fp, tmp2, ctx);
+	/* ldr tmp2, [tmp2] // load the AND mask */
+	emit_ld(tmp2, 0, tmp2, ctx);
+	/* and tmp, tmp, tmp2 // apply the AND mask */
+	emit_and(tmp, tmp, tmp2, ctx);
+	/* sub tmp2, fp, (0x7f0 + 0x28) // location of the map's OR mask */
+	emit_imm(tmp2, (0x7f0 + 0x28) * -1, ctx);
+	emit_add(tmp2, fp, tmp2, ctx);
+	/* ldr tmp2, [tmp2] // load the OR mask */
+	emit_ld(tmp2, 0, tmp2, ctx);
+	/* or tmp, tmp, tmp2 // apply the OR mask */
+	emit_or(tmp, tmp, tmp2, ctx);
+      }
+      else if (ctx->prog->map_info->current_active_map->sandbox_and_mask &&
+	       ctx->prog->map_info->current_active_map->sandbox_or_mask) {
+
+	pr_info("EMIT SFI: array");
 	/* mov tmp2, and_mask */
 	mask = (u64)ctx->prog->map_info->current_active_map->sandbox_and_mask;
 	emit_imm(tmp2, mask, ctx);
@@ -255,7 +300,7 @@ static inline u8 emit_sfi(u8 addr_reg, s16 off, struct rv_jit_context *ctx, bool
 	/* or tmp, tmp, tmp2 // apply the OR mask */
 	emit_or(tmp, tmp, tmp2, ctx);
       } else {
-	// pr_info("EMIT SFI: hashmap");
+	pr_info("EMIT SFI: hashmap2");
 	/* mov tmp, off */
 	emit_imm(tmp, off, ctx);
 	/* add tmp, addr_reg, off // load effective address */
@@ -1221,10 +1266,11 @@ int bpf_jit_emit_insn(const struct bpf_insn *insn, struct rv_jit_context *ctx,
 #ifdef CONFIG_BPF_SFI_MAP_MASKING
 		if (is_sandboxed && is_map_reg(ctx->prog, rs)) {
 			bitmap_set(ctx->prog->map_info->map_reg_bitmap, rd, 1);
+			// pr_info("dst %d = src %d", dst, src);
 		} else if (is_sandboxed && is_map_reg(ctx->prog, rd)) {
 			bitmap_clear(ctx->prog->map_info->map_reg_bitmap, rd, 1);
 		}
-#endif 
+#endif /* CONFIG_BPF_SFI_MAP_MASKING */
 
 		break;
 
@@ -2175,9 +2221,23 @@ void bpf_jit_build_prologue(struct rv_jit_context *ctx, bool is_sandboxed)
 		emit_addi(RV_REG_SP, RV_REG_A0, 0x7f0, ctx);
 		sandbox_insns += SANDBOX_MEMORY_MANAGEMENT_INSNS;
 
-
 	}
 #endif /* CONFIG_BPF_SANDBOX_MEMORY_MANAGEMENT */
+
+	
+#ifdef CONFIG_BPF_SFI_MASK_MAP_READ_WRITE
+	if (ctx->prog->aux->used_map_cnt) {
+	  // pr_info("In prologue\n");
+	  ctx->prog->map_info->current_active_map = ctx->prog->aux->used_maps[0];
+	  // pr_info("Set current active map %px\n", ctx->prog->map_info->current_active_map);
+	  // pr_info("map type : %u\n", ctx->prog->map_info->current_active_map->map_type);
+	}
+	/* 
+	else {
+	  pr_info("No map in prog\n");
+	}
+	*/
+#endif /* CONFIG_BPF_SFI_MASK_MAP_READ_WRITE */
 
 #ifdef CONFIG_BPF_SANDBOX_STACK_MANAGEMENT
 	if (is_sandboxed) {
