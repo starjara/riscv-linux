@@ -196,9 +196,9 @@ static void gbpf_copy_skb_ctx(struct sk_buff *dst, const struct sk_buff *src)
 }
 */
 
-static void gbpf_copy_skb_hard(struct sk_buff *dst, const struct sk_buff *src)
+void gbpf_copy_skb_hard(struct sk_buff *dst, const struct sk_buff *src)
 {
-	memset(dst, 0, sizeof(*dst));
+  //memset(dst, 0, sizeof(*dst));
 
 	/* __sk_buff-visible scalar-ish fields */
 	dst->len            = src->len;
@@ -226,7 +226,7 @@ static void gbpf_copy_skb_hard(struct sk_buff *dst, const struct sk_buff *src)
 	//dst->head           = src->head;
 	//dst->data           = src->data;
 	//dst->tail           = src->tail;
-	//dst->end            = src->end;
+	dst->end            = src->end;
 	//dst->mac_header     = src->mac_header;
 	dst->network_header = src->network_header;
 	dst->transport_header = src->transport_header;
@@ -239,6 +239,7 @@ static void gbpf_copy_skb_hard(struct sk_buff *dst, const struct sk_buff *src)
 	dst->active_extensions = src->active_extensions;
 #endif
 }
+EXPORT_SYMBOL_GPL(gbpf_copy_skb_hard);
 
 static void *gbpf_copy_ctx_skb(const struct sk_buff *skb,
 			       const struct bpf_prog *prog)
@@ -256,26 +257,32 @@ static void *gbpf_copy_ctx_skb(const struct sk_buff *skb,
 		return NULL;
 
 	/* 1-page linear skb만 지원 */
+	/*
 	if (skb_headlen(skb) > PAGE_SIZE)
 		return NULL;
 	if (skb_is_nonlinear(skb))
 		return NULL;
+	*/
 
 	head_off = offset_in_page(skb->head);
 	data_off = skb->data - skb->head;
 	tail_off = skb_tail_pointer(skb) - skb->head;
-	end_off = skb_end_offset(skb);
+	// end_off = skb_end_offset(skb);
 
 
+	/*
 	if (head_off + end_off > PAGE_SIZE) {
 		return NULL;
 	}
+	*/
 	
 	err = gbpf_map_pkt_page(prog, skb->head);
+	/*
 	if (err) {
 	  pr_warn("[GBPF] Mapping failed\n");
 	  return NULL;
 	}
+	*/
 
 	/* CTX Copy */
 	shadow_ctx = page_to_virt(prog->aux->gaux->gbpf_page);
@@ -287,7 +294,7 @@ static void *gbpf_copy_ctx_skb(const struct sk_buff *skb,
 	shadow->head = (void *)(uintptr_t)(GBPF_PKT_BASE + head_off);
 	shadow->data = (void *)(uintptr_t)(GBPF_PKT_BASE + head_off + data_off);
 	shadow->tail = tail_off;
-	shadow->end = end_off;
+	// shadow->end = end_off;
 
 	return (void *)prog->aux->gaux;
 }
@@ -312,7 +319,7 @@ void *gbpf_copy_ctx(const void *ctx, const struct bpf_prog *prog)
 	size_t ctx_size;
 
 	if (!ctx)
-		return NULL;
+	  return (void *)prog->aux->gaux;
 
 	prog->aux->gaux->orig_ctx = ctx;
 

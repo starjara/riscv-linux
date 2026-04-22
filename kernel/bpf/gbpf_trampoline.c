@@ -52,7 +52,7 @@ static inline u64 gbpf_from_gbpf_space_to_kernel(const struct gbpf_aux *gaux, u6
 #endif
 
   if (arg == GBPF_CTX_BASE) {
-    //ret = gaux->orig_ctx;
+    // ret = gaux->orig_ctx;
     ret = page_to_virt(gaux->gbpf_page);
   }
   else if (GBPF_CTX_BASE <= arg && arg < GBPF_CTX_BASE + GBPF_PAGE_SIZE) {
@@ -85,7 +85,7 @@ static inline u64 gbpf_from_gbpf_space_to_kernel(const struct gbpf_aux *gaux, u6
     if (ret < GBPF_MAP_BASE)
       ret = d->map;
     else {
-      ret = ret > GBPF_MAP_BASE ? ret - GBPF_MAP_BASE : GBPF_MAP_BASE - ret;
+      ret = ret >= GBPF_MAP_BASE ? ret - GBPF_MAP_BASE : GBPF_MAP_BASE - ret;
       ret += d->map;
     }
   }
@@ -111,15 +111,15 @@ static u64 gbpf_call_helper_generic(struct gbpf_aux *gaux, u64 call_target,
   pr_info("Orig_ctx : 0x%lx", gaux->orig_ctx); 
 #endif
 	
-  if (arg1 != 0)
+  if (arg1 >= GBPF_CTX_BASE)
     arg1 = gbpf_from_gbpf_space_to_kernel(gaux, arg1, meta);
-  if (arg2 != 0)
+  if (arg2 >= GBPF_CTX_BASE)
     arg2 = gbpf_from_gbpf_space_to_kernel(gaux, arg2, meta);
-  if (arg3 != 0)
+  if (arg3 >= GBPF_CTX_BASE)
     arg3 = gbpf_from_gbpf_space_to_kernel(gaux, arg3, meta);
-  if (arg4 != 0)
+  if (arg4 >= GBPF_CTX_BASE)
     arg4 = gbpf_from_gbpf_space_to_kernel(gaux, arg4, meta);
-  if (arg5 != 0)
+  if (arg5 >= GBPF_CTX_BASE)
     arg5 = gbpf_from_gbpf_space_to_kernel(gaux, arg5, meta);
 	
 #ifdef GBPF_DEBUG
@@ -216,7 +216,7 @@ noinline u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4,
   pr_info("[GBPF] Tramptest ret_before = 0x%lx\n", ret);
 #endif
 
-  if (ret != 0)
+  if (virt_addr_valid(ret))
     ret = gbpf_convert_helper_ret(ret, gaux, &meta);
 
 #ifdef GBPF_DEBUG
