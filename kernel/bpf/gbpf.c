@@ -319,11 +319,12 @@ static void *gbpf_copy_ctx_skb(const struct sk_buff *skb,
   data_off = skb->data - skb->head;
   tail_off = skb_tail_pointer(skb) - skb->head;
 
-  shadow->head = (u64) skb->head & 0x0000FFFFFFFF;
+  shadow->head = (u64) skb->head & 0x0000FFFFFFFFFFFF;
   shadow->data = (void *)(uintptr_t)(shadow->head + data_off);
   shadow->tail = shadow->head + tail_off;
 
   return (void *)skb;
+  //return (void *)shadow;
   //return (void *)prog->aux->gaux;
 }
 
@@ -385,7 +386,7 @@ void *gbpf_copy_ctx(const void *ctx, const struct bpf_prog *prog)
 
   pr_info("ctx copy: %llu ns", after - before);
 	*/
-	ret = page_to_virt(prog->aux->gaux->gbpf_page);
+	//ret = page_to_virt(prog->aux->gaux->gbpf_page);
 
 	return ret; 
 }

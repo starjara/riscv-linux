@@ -264,14 +264,14 @@ static void __build_epilogue(bool is_tail_call, struct rv_jit_context *ctx)
 	   * Restore old HGATP first.
 	   */
 	  //emit_ld(RV_REG_S11, GBPF_STK_OLD_HGATP, RV_REG_S10, ctx);
-	  emit_ld(RV_REG_S11, GBPF_STK_OLD_HGATP, RV_REG_SP, ctx);
-	  emit_csrw(0, RV_REG_S11, RV_CSR_HGATP, ctx);
+	  emit_ld(RV_REG_T5, GBPF_STK_OLD_HGATP, RV_REG_SP, ctx);
+	  emit_csrw(0, RV_REG_T5, RV_CSR_HGATP, ctx);
 	  
 	  /*
 	   * Restore saved S11 from frame slot.
 	   */
 	  //emit_ld(RV_REG_S11, GBPF_STK_SAVE_S11, RV_REG_S10, ctx);
-	  emit_ld(RV_REG_S11, GBPF_STK_SAVE_S11, RV_REG_SP, ctx);
+	  //emit_ld(RV_REG_S11, GBPF_STK_SAVE_S11, RV_REG_SP, ctx);
 	  
 	  /*
 	   * Restore saved S10 last.
@@ -1576,8 +1576,8 @@ out_be:
 		  if (!ctx->prog->aux->gaux->gbpf_page)
 		    return ret;
 
-		  // S11 has call taget offset
-		  emit_imm(RV_REG_S11, insn->imm, ctx);
+		  // T5 has call taget offset
+		  emit_imm(RV_REG_T5, insn->imm, ctx);
 #ifdef GBPF_DEBUG 
 		  pr_info("helper_call_imm : 0x%llx\n", (u64)insn->imm);
 		  pr_info("helper_id(off)  : 0x%llx\n", (u64)insn->off);
@@ -2145,39 +2145,25 @@ void bpf_jit_build_prologue(struct rv_jit_context *ctx)
 	  hgatp = hgatp << HGATP_VMID_SHIFT;
 	  hgatp |= HGATP_MODE_SV48X4 << HGATP_MODE_SHIFT;
 	  hgatp |= ((page_to_phys(ctx->prog->aux->gaux->gpgd) >> PAGE_SHIFT) & HGATP_PPN);
-	  
-	  // Backup S11 and S10 save GAXU reg
-	  emit_sd(RV_REG_SP, GBPF_STK_SAVE_S11, RV_REG_S11, ctx);
-	  /*
-	  emit_sd(RV_REG_SP, GBPF_STK_SAVE_S10, RV_REG_S10, ctx);
-	  emit_sd(RV_REG_SP, GBPF_STK_SAVE_GAUX, RV_REG_A0, ctx);
-	  */
 
-	  //emit_addi(RV_REG_S10, RV_REG_SP, 0, ctx);   /* mv s10, sp */
+	  //emit_sd(RV_REG_SP, GBPF_STK_SAVE_T4, RV_REG_S11, ctx);
 	  
 	  // Read HGATP to S11 and backup HGATP to kernel SP
-	  emit_csrw(RV_REG_S11, 0, RV_CSR_HGATP, ctx);
-	  //emit_sd(RV_REG_S10, GBPF_STK_OLD_HGATP, RV_REG_S11, ctx);
-	  emit_sd(RV_REG_SP, GBPF_STK_OLD_HGATP, RV_REG_S11, ctx);
-
-	  //emit_imm(RV_REG_A0, GBPF_CTX_BASE, ctx);
-
+	  emit_csrw(RV_REG_T5, 0, RV_CSR_HGATP, ctx);
+	  emit_sd(RV_REG_SP, GBPF_STK_OLD_HGATP, RV_REG_T5, ctx);
+	  emit_imm(RV_REG_T5, hgatp, ctx);
+	  emit_csrw(0, RV_REG_T5, RV_CSR_HGATP, ctx);
 	  
-	  /*
-	   * Switch HGATP to GBPF page-table.
-	   */
-	  emit_imm(RV_REG_S11, hgatp, ctx);
-	  emit_csrw(0, RV_REG_S11, RV_CSR_HGATP, ctx);
-	  
+	  emit_mv(RV_REG_T4, RV_REG_A0, ctx);
+
 	  /*
 	   * Initialize BPF virtual stack pointer.
 	   */
-	  // emit_imm(RV_REG_S5, GBPF_CTX_BASE + PAGE_SIZE, ctx);
-	  emit_imm(RV_REG_S11, 0x0000FFFFFFFFFFFF, ctx);
-	  emit_and(RV_REG_A0, RV_REG_A0, RV_REG_S11, ctx);
-	  emit_imm(RV_REG_T1, PAGE_SIZE, ctx);
-	  emit_add(RV_REG_S5, RV_REG_A0, RV_REG_T1, ctx);
-	
+	  u64 bpf_stack = (u64) page_to_virt(ctx->prog->aux->gaux->gbpf_page);
+	  bpf_stack &= 0x0000FFFFFFFFFFFF;
+	  emit_imm(RV_REG_A0, bpf_stack, ctx);
+	  emit_imm(RV_REG_S5, bpf_stack + PAGE_SIZE, ctx);
+	  
 
 	  if (bpf_stack_adjust) {
 	    ctx->prog->aux->bpf_stack_adjust = bpf_stack_adjust;

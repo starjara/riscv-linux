@@ -12,6 +12,27 @@
 #define MASK 0xFFFF000000000000;
 //u64 h_before, h_after;
 
+extern u64 bpf_skb_load_helper_8_no_cache(const struct sk_buff *skb, u64 off);
+extern u64 bpf_skb_load_helper_16_no_cache(const struct sk_buff *skb, u64 off);
+extern u64 bpf_skb_load_helper_32_no_cache(const struct sk_buff *skb, u64 off);
+
+extern u64 bpf_skb_load_helper_8(const struct sk_buff *skb, u64 off,
+                                 const void *data, u64 len);
+extern u64 bpf_skb_load_helper_16(const struct sk_buff *skb, u64 off,
+                                  const void *data, u64 len);
+extern u64 bpf_skb_load_helper_32(const struct sk_buff *skb, u64 off,
+                                  const void *data, u64 len);
+
+static __always_inline bool gbpf_is_internal_skb_load_helper(u64 target)
+{
+    return target == (u64)(unsigned long)&bpf_skb_load_helper_8_no_cache  ||
+           target == (u64)(unsigned long)&bpf_skb_load_helper_16_no_cache ||
+           target == (u64)(unsigned long)&bpf_skb_load_helper_32_no_cache ||
+           target == (u64)(unsigned long)&bpf_skb_load_helper_8           ||
+           target == (u64)(unsigned long)&bpf_skb_load_helper_16          ||
+           target == (u64)(unsigned long)&bpf_skb_load_helper_32;
+}
+
 extern u64 bpf_xdp_adjust_tail(struct xdp_buff *xdp, int offset);
 
 typedef struct map_addr_meta {
@@ -34,6 +55,10 @@ static inline u64 gbpf_from_gbpf_space_to_kernel(const struct gbpf_aux *gaux, u6
 
   if(!arg)
     return arg;
+
+  if (virt_addr_valid(ret)) {
+    return -EINVAL;
+  }
 
   if (arg == GBPF_CTX_BASE) {
       ret = gaux->orig_ctx;
@@ -166,6 +191,8 @@ static u64 gbpf_convert_helper_ret(u64 ret, struct gbpf_aux *gaux, const map_add
   return ret;
  
 }
+
+__attribute__((zero_call_used_regs("skip")))
 noinline u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5)
 
 {
@@ -218,10 +245,12 @@ noinline u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4,
   u64 imm;
   u64 ret;
   gbpf_helper_fn_t	fn;
+  u64 orig_ctx;
 
   asm volatile (
-		"mv %0, s11\n\t"
-		: "=r"(imm)
+		"mv %0, t4\n\t"
+		"mv %1, t5\n\t"
+		: "=r"(orig_ctx), "=r"(imm)
 		:
 		:);
 
@@ -249,6 +278,10 @@ noinline u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4,
     arg5 = tmp;
   }
   
+  if (gbpf_is_internal_skb_load_helper(call_target)) {
+    arg1 = orig_ctx;
+  }
+  
   fn = (gbpf_helper_fn_t)(unsigned long)call_target;
 
   ret = fn(arg1, arg2, arg3, arg4, arg5);
@@ -256,6 +289,13 @@ noinline u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4,
   if (virt_addr_valid(ret)) {
     ret &= ~MASK;
   }
+
+  
+  asm volatile (
+		"mv t4, %0\n\t"
+		:
+		: "r"(orig_ctx)
+		:);
 
   return ret;
 }
