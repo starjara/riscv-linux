@@ -5,9 +5,9 @@
 #include <linux/smp.h>
 #include "gbpf_trampoline.h"
 
-//#define LOG_E pr_info("[gbpf_trampoline.c] Enter: %s\n", __func__)
+#define LOG_E pr_info("[gbpf_trampoline.c] Enter: %s\n", __func__)
 #define LOG_E ;
-//#define GBPF_DEBUG 1
+#define GBPF_DEBUG 1
 
 /* net/core/filter.c 쪽 internal helper들 */
 extern u64 bpf_skb_load_helper_8_no_cache(const struct sk_buff *skb, u64 off);
