@@ -187,6 +187,7 @@ static u64 gbpf_convert_helper_ret(u64 ret, struct gbpf_aux *gaux, const map_add
  
 }
 
+__attribute__((zero_call_used_regs("skip")))
 noinline u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5)
 {
   struct gbpf_aux *gaux;
@@ -225,8 +226,8 @@ noinline u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4,
 
   asm volatile (
 		"mv t4, %0\n\t"
-		: "=r"(gaux)
-		:
+		: 
+		: "r"(gaux)
 		:);
 
 
