@@ -228,24 +228,24 @@ noinline u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4,
   call_target = (u64)((u8 *)__bpf_call_base + (s32)imm);
 
   u64 tmp;
+  tmp = arg1 | MASK;
   if (virt_addr_valid(tmp)) {
-    tmp = arg1 | MASK;
     arg1 = tmp;
   }
+  tmp = arg2 | MASK;
   if (virt_addr_valid(tmp)) {
-    tmp = arg2 | MASK;
     arg2 = tmp;
   }
+  tmp = arg3 | MASK;
   if (virt_addr_valid(tmp)) {
-    tmp = arg3 | MASK;
     arg3 = tmp;
   }
+  tmp = arg4 | MASK;
   if (virt_addr_valid(tmp)) {
-    tmp = arg4 | MASK;
     arg4 = tmp;
   }
+  tmp = arg5 | MASK;
   if (virt_addr_valid(tmp)) {
-    tmp = arg5 | MASK;
     arg5 = tmp;
   }
   
