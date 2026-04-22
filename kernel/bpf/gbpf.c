@@ -206,10 +206,8 @@ static void gbpf_copy_skb_ctx(struct sk_buff *dst, const struct sk_buff *src)
 }
 */
 
-static void gbpf_copy_skb_hard(struct sk_buff *dst, const struct sk_buff *src)
+void gbpf_copy_skb_hard(struct sk_buff *dst, const struct sk_buff *src)
 {
-	memset(dst, 0, sizeof(*dst));
-
 	/* __sk_buff-visible scalar-ish fields */
 	dst->len            = src->len;
 	dst->pkt_type       = src->pkt_type;
@@ -236,8 +234,8 @@ static void gbpf_copy_skb_hard(struct sk_buff *dst, const struct sk_buff *src)
 	//dst->head           = src->head;
 	//dst->data           = src->data;
 	//dst->tail           = src->tail;
-	//dst->end            = src->end;
-	//dst->mac_header     = src->mac_header;
+	dst->end            = src->end;
+	dst->mac_header     = src->mac_header;
 	dst->network_header = src->network_header;
 	dst->transport_header = src->transport_header;
 
@@ -249,6 +247,7 @@ static void gbpf_copy_skb_hard(struct sk_buff *dst, const struct sk_buff *src)
 	dst->active_extensions = src->active_extensions;
 #endif
 }
+EXPORT_SYMBOL_GPL(gbpf_copy_skb_hard);
 
 static void *gbpf_copy_ctx_skb(const struct sk_buff *skb,
 			       const struct bpf_prog *prog)
@@ -305,7 +304,7 @@ static void *gbpf_copy_ctx_skb(const struct sk_buff *skb,
 	*/
   
   struct sk_buff *shadow;
-  u32 head_off, data_off, tail_off, end_off;
+  u32 head_off, data_off, tail_off;
 
   shadow = page_to_virt(prog->aux->gaux->gbpf_page);
   gbpf_copy_skb_hard(shadow, skb);
@@ -319,12 +318,10 @@ static void *gbpf_copy_ctx_skb(const struct sk_buff *skb,
   head_off = offset_in_page(skb->head);
   data_off = skb->data - skb->head;
   tail_off = skb_tail_pointer(skb) - skb->head;
-  end_off = skb_end_offset(skb);
 
   shadow->head = (u64) skb->head & 0x0000FFFFFFFF;
   shadow->data = (void *)(uintptr_t)(shadow->head + data_off);
   shadow->tail = shadow->head + tail_off;
-  shadow->end = end_off;
 
   return (void *)skb;
   //return (void *)prog->aux->gaux;

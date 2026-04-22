@@ -9,6 +9,7 @@
 #define LOG_E ;
 #define GBPF_DEBUG 1
 
+#define MASK 0xFFFF000000000000;
 //u64 h_before, h_after;
 
 extern u64 bpf_xdp_adjust_tail(struct xdp_buff *xdp, int offset);
@@ -216,7 +217,6 @@ noinline u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4,
   u64 call_target;
   u64 imm;
   u64 ret;
-  u64 mask = 0xFFFF000000000000;
   gbpf_helper_fn_t	fn;
 
   asm volatile (
@@ -227,24 +227,25 @@ noinline u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4,
 
   call_target = (u64)((u8 *)__bpf_call_base + (s32)imm);
 
-  u64 tmp = arg1 | mask;
+  u64 tmp;
   if (virt_addr_valid(tmp)) {
+    tmp = arg1 | MASK;
     arg1 = tmp;
   }
-  tmp = arg2 | mask;
   if (virt_addr_valid(tmp)) {
+    tmp = arg2 | MASK;
     arg2 = tmp;
   }
-  tmp = arg3 | mask;
   if (virt_addr_valid(tmp)) {
+    tmp = arg3 | MASK;
     arg3 = tmp;
   }
-  tmp = arg4 | mask;
   if (virt_addr_valid(tmp)) {
+    tmp = arg4 | MASK;
     arg4 = tmp;
   }
-  tmp = arg5 | mask;
   if (virt_addr_valid(tmp)) {
+    tmp = arg5 | MASK;
     arg5 = tmp;
   }
   
@@ -253,7 +254,7 @@ noinline u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4,
   ret = fn(arg1, arg2, arg3, arg4, arg5);
 
   if (virt_addr_valid(ret)) {
-    ret &= ~mask;
+    ret &= ~MASK;
   }
 
   return ret;

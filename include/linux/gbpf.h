@@ -77,6 +77,7 @@ void gbpf_call_inc_vmid(void);
 void gbpf_call_dec_vmid(void);
 
 void *gbpf_copy_ctx(const void *ctx, const struct bpf_prog *prog);
+void gbpf_copy_skb_hard(struct sk_buff *dst, const struct sk_buff *src);
 
 // Trampoline functions
 u64 gbpf_helper_call_trampoline(u64 arg1, u64 arg2, u64 arg3, u64 arg4, u64 arg5);
