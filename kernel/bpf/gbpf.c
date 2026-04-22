@@ -305,9 +305,27 @@ static void *gbpf_copy_ctx_skb(const struct sk_buff *skb,
 	*/
   
   struct sk_buff *shadow;
+  u32 head_off, data_off, tail_off, end_off;
+
   shadow = page_to_virt(prog->aux->gaux->gbpf_page);
-  memcpy(shadow, skb, sizeof(*shadow));
-	 
+  gbpf_copy_skb_hard(shadow, skb);
+
+  int err = gbpf_map_pkt_page(prog, skb->head);
+  if (err) {
+    pr_warn("[GBPF] Mapping failed\n");
+    return NULL;
+  }
+  
+  head_off = offset_in_page(skb->head);
+  data_off = skb->data - skb->head;
+  tail_off = skb_tail_pointer(skb) - skb->head;
+  end_off = skb_end_offset(skb);
+
+  shadow->head = (u64) skb->head & 0x0000FFFFFFFF;
+  shadow->data = (void *)(uintptr_t)(shadow->head + data_off);
+  shadow->tail = shadow->head + tail_off;
+  shadow->end = end_off;
+
   return (void *)skb;
   //return (void *)prog->aux->gaux;
 }
